@@ -3,8 +3,15 @@
 ## Конфигурация
 
 - ~10 одновременных пользователей
-- Один Go-сервер, один Flutter-клиент
+- Один Go-сервер, один Flutter-клиент (Web — приоритет)
 - Без микросервисов и лишней инфраструктуры
+
+## Правила ветвления
+
+- Каждая фича — отдельная ветка `feature/<name>`
+- Каждая фича покрывается тестами
+- Мерж в `main` только через PR с зелёными тестами
+- Основные ветки: `main`, `develop`
 
 ## Архитектура
 
@@ -19,7 +26,7 @@
 ├─────────────────────────────────────────┤
 │          Infrastructure Layer           │
 ├──────────────┬──────────────────────────┤
-│  PostgreSQL  │  Локальная FS (файлы)   │
+│   MariaDB   │  Локальная FS (файлы)   │
 └──────────────┴──────────────────────────┘
 ```
 
@@ -32,7 +39,7 @@
 | HTTP | chi router | Лёгкий, stdlib-compatible |
 | WebSocket | gorilla/websocket | Зрелая библиотека |
 | WebRTC | Pion | Зрелая Go-библиотека, P2P для 1:1 |
-| БД | PostgreSQL 16 | ACID, JSONB, full-text search |
+| БД | MariaDB 11 | ACID, JSON, full-text search, MySQL-совместимость |
 | Файлы | Локальная FS | ~10 пользователей, einfach |
 | Авторизация | JWT (access + refresh) | Stateless, простота |
 | Пароли | bcrypt | Стандарт безопасности |
@@ -103,7 +110,7 @@ uphone/
 │   │   ├── files/                   # Загрузка файлов
 │   │   ├── media/                   # WebRTC (P2P)
 │   │   └── infrastructure/
-│   │       ├── database/            # PostgreSQL
+│   │       ├── database/            # MariaDB
 │   │       └── storage/             # Локальная ФС
 │   ├── migrations/                  # SQL миграции
 │   │   └── 001_init.sql
@@ -192,74 +199,80 @@ WS     /ws?token=                    # Real-time соединение
 {"type": "message.reaction", "chatId": "123", "msgId": "456", "emoji": "👍", "userId": "789"}
 ```
 
-## Database Schema (основные таблицы)
+## Database Schema (MariaDB)
 
 ```sql
 -- Пользователи
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id CHAR(36) PRIMARY KEY,
     username VARCHAR(30) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(100),
     avatar_url TEXT,
     status VARCHAR(20) DEFAULT 'offline',
-    last_seen TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+    last_seen DATETIME(3),
+    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Чаты
 CREATE TABLE chats (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id CHAR(36) PRIMARY KEY,
     type VARCHAR(20) NOT NULL, -- 'personal', 'group', 'channel'
     name VARCHAR(100),
     description TEXT,
     avatar_url TEXT,
-    created_by UUID REFERENCES users(id),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+    created_by CHAR(36),
+    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Участники чатов
 CREATE TABLE chat_members (
-    chat_id UUID REFERENCES chats(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    chat_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NOT NULL,
     role VARCHAR(20) DEFAULT 'member', -- 'owner', 'admin', 'member'
-    joined_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (chat_id, user_id)
-);
+    joined_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (chat_id, user_id),
+    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Сообщения
 CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    chat_id UUID REFERENCES chats(id) ON DELETE CASCADE,
-    sender_id UUID REFERENCES users(id),
+    id CHAR(36) PRIMARY KEY,
+    chat_id CHAR(36) NOT NULL,
+    sender_id CHAR(36),
     content TEXT,
     type VARCHAR(20) DEFAULT 'text', -- 'text', 'image', 'video', 'file', 'voice'
     file_url TEXT,
-    reply_to UUID REFERENCES messages(id),
+    reply_to CHAR(36),
     is_pinned BOOLEAN DEFAULT FALSE,
     is_deleted BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Реакции
 CREATE TABLE reactions (
-    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    message_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NOT NULL,
     emoji VARCHAR(10) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (message_id, user_id, emoji)
-);
+    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (message_id, user_id, emoji),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Индексы
 CREATE INDEX idx_messages_chat_id ON messages(chat_id, created_at DESC);
 CREATE INDEX idx_messages_sender_id ON messages(sender_id);
 CREATE INDEX idx_chat_members_user_id ON chat_members(user_id);
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
 ```
 
 ## Этапы разработки
