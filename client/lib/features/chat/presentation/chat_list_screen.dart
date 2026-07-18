@@ -107,9 +107,21 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showNewChatDialog(context),
-        child: const Icon(Icons.chat),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'group',
+            onPressed: () => context.go('/chats/create'),
+            child: const Icon(Icons.group_add),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'chat',
+            onPressed: () => _showNewChatDialog(context),
+            child: const Icon(Icons.chat),
+          ),
+        ],
       ),
     );
   }

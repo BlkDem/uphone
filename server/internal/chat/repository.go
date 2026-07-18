@@ -172,6 +172,30 @@ func (r *Repository) GetMembers(ctx context.Context, chatID string) ([]Member, e
 	return members, nil
 }
 
+func (r *Repository) GetMemberRole(ctx context.Context, chatID, userID string) (string, error) {
+	var role string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT role FROM chat_members WHERE chat_id = ? AND user_id = ?`,
+		chatID, userID).Scan(&role)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("not a member")
+	}
+	return role, err
+}
+
+func (r *Repository) UpdateChat(ctx context.Context, chat *Chat) error {
+	chat.UpdatedAt = time.Now().UTC()
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE chats SET name = ?, description = ?, avatar_url = ?, updated_at = ? WHERE id = ?`,
+		chat.Name, chat.Description, chat.AvatarURL, chat.UpdatedAt, chat.ID)
+	return err
+}
+
+func (r *Repository) DeleteChat(ctx context.Context, chatID string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM chats WHERE id = ?`, chatID)
+	return err
+}
+
 func (r *Repository) SendMessage(ctx context.Context, msg *Message) error {
 	msg.ID = uuid.New().String()
 	msg.CreatedAt = time.Now().UTC()

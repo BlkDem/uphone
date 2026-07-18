@@ -86,14 +86,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {},
-          ),
+          if (currentChat.type != 'personal')
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => context.go('/chats/${widget.chatId}/info'),
+            ),
         ],
       ),
       body: Column(
