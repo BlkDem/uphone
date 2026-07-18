@@ -204,11 +204,20 @@ func (r *Repository) SendMessage(ctx context.Context, msg *Message) error {
 		msg.Type = "text"
 	}
 
+	var replyTo interface{} = nil
+	if msg.ReplyTo != "" {
+		replyTo = msg.ReplyTo
+	}
+	var fileURL interface{} = nil
+	if msg.FileURL != "" {
+		fileURL = msg.FileURL
+	}
+
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, reply_to, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		msg.ID, msg.ChatID, msg.SenderID, msg.Content, msg.Type,
-		msg.FileURL, msg.ReplyTo, msg.CreatedAt, msg.UpdatedAt)
+		fileURL, replyTo, msg.CreatedAt, msg.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
