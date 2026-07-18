@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/uphone/server/internal/auth"
+	"github.com/uphone/server/internal/chat"
 	"github.com/uphone/server/internal/config"
 	"github.com/uphone/server/internal/infrastructure/database"
 	"github.com/uphone/server/internal/middleware"
@@ -36,6 +38,12 @@ func main() {
 	userRepo := users.NewRepository(db)
 	authService := auth.NewService(userRepo, cfg.JWTSecret)
 	authHandler := auth.NewHandler(authService)
+
+	chatRepo := chat.NewRepository(db)
+	chatHub := chat.NewHub()
+	go chatHub.Run()
+	chatAPI := chat.NewAPIHandler(chatRepo)
+	chatWS := chat.NewHandler(chatRepo, chatHub)
 
 	tokenValidator := func(tokenString string) (string, error) {
 		return authService.ValidateToken(tokenString)
@@ -66,7 +74,31 @@ func main() {
 			api.HandleFunc("PUT /users/me", authHandler.UpdateMe)
 			api.HandleFunc("GET /users/search", authHandler.SearchUsers)
 			api.HandleFunc("GET /users/{id}", authHandler.GetUser)
+
+			api.HandleFunc("POST /chats", chatAPI.CreateChat)
+			api.HandleFunc("GET /chats", chatAPI.GetChats)
+			api.HandleFunc("GET /chats/{id}", chatAPI.GetChat)
+			api.HandleFunc("POST /chats/{id}/messages", chatAPI.SendMessage)
+			api.HandleFunc("GET /chats/{id}/messages", chatAPI.GetMessages)
+			api.HandleFunc("PUT /chats/{id}/messages/{msgId}", chatAPI.EditMessage)
+			api.HandleFunc("DELETE /chats/{id}/messages/{msgId}", chatAPI.DeleteMessage)
+			api.HandleFunc("POST /chats/{id}/messages/{msgId}/react", chatAPI.AddReaction)
 		})
+	})
+
+	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "missing token", http.StatusUnauthorized)
+			return
+		}
+		userID, err := authService.ValidateToken(token)
+		if err != nil {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), "user_id", userID)
+		chatWS.HandleWebSocket(w, r.WithContext(ctx))
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
