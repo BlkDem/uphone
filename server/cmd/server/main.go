@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/uphone/server/internal/auth"
 	"github.com/uphone/server/internal/config"
 	"github.com/uphone/server/internal/infrastructure/database"
+	"github.com/uphone/server/internal/middleware"
+	"github.com/uphone/server/internal/users"
 )
 
 func main() {
@@ -30,16 +33,40 @@ func main() {
 
 	os.MkdirAll(cfg.UploadDir, 0755)
 
+	userRepo := users.NewRepository(db)
+	authService := auth.NewService(userRepo, cfg.JWTSecret)
+	authHandler := auth.NewHandler(authService)
+
+	tokenValidator := func(tokenString string) (string, error) {
+		return authService.ValidateToken(tokenString)
+	}
+	authMw := middleware.AuthMiddleware(tokenValidator)
+
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(chimw.Timeout(30 * time.Second))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	r.Route("/api/v1", func(api chi.Router) {
+		api.HandleFunc("POST /auth/register", authHandler.Register)
+		api.HandleFunc("POST /auth/login", authHandler.Login)
+		api.HandleFunc("POST /auth/refresh", authHandler.Refresh)
+
+		api.Group(func(api chi.Router) {
+			api.Use(authMw)
+			api.HandleFunc("POST /auth/logout", authHandler.Logout)
+			api.HandleFunc("GET /users/me", authHandler.GetMe)
+			api.HandleFunc("PUT /users/me", authHandler.UpdateMe)
+			api.HandleFunc("GET /users/search", authHandler.SearchUsers)
+			api.HandleFunc("GET /users/{id}", authHandler.GetUser)
+		})
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
@@ -63,6 +90,4 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("server shutting down...")
-
-	fmt.Fprintln(os.Stderr, "server stopped")
 }
