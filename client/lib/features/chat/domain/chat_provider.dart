@@ -60,6 +60,12 @@ class ChatRepository {
       'emoji': emoji,
     });
   }
+
+  Future<List<Map<String, dynamic>>> getMembers(String chatId) async {
+    final response = await _dio.get('/api/v1/chats/$chatId/members');
+    final data = response.data as List;
+    return data.cast<Map<String, dynamic>>();
+  }
 }
 
 class ChatState {
@@ -103,10 +109,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final WsClient _wsClient;
 
   ChatNotifier(this._repository, this._wsClient) : super(const ChatState()) {
-    _wsClient.connect(
-      '',
-      onMessage: _handleWsMessage,
-    );
+    _wsClient.onMessage = _handleWsMessage;
   }
 
   void _handleWsMessage(Map<String, dynamic> message) {
@@ -117,7 +120,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case 'message.new':
         if (payload is Map<String, dynamic>) {
           final msg = ChatMessage.fromJson(payload);
-          _addMessage(msg);
+          final alreadyHas = state.messages.any((m) => m.id == msg.id);
+          if (!alreadyHas) {
+            _addMessage(msg);
+          } else {
+            _updateChatLastMessage(msg);
+          }
         }
         break;
       case 'typing.start':
@@ -149,7 +157,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (msg.chatId == state.activeChatId) {
       state = state.copyWith(messages: [...state.messages, msg]);
     }
+    _updateChatLastMessage(msg);
+  }
 
+  void _updateChatLastMessage(ChatMessage msg) {
     final updatedChats = state.chats.map((chat) {
       if (chat.id == msg.chatId) {
         return Chat(
@@ -202,11 +213,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> sendMessage(String chatId, String content) async {
     try {
-      _wsClient.send({
-        'type': 'message.send',
-        'chatId': chatId,
-        'content': content,
-      });
+      final msg = await _repository.sendMessage(chatId, content: content);
+      final updatedChats = state.chats.map((chat) {
+        if (chat.id == chatId) {
+          return Chat(
+            id: chat.id,
+            type: chat.type,
+            name: chat.name,
+            description: chat.description,
+            avatarUrl: chat.avatarUrl,
+            createdBy: chat.createdBy,
+            createdAt: chat.createdAt,
+            updatedAt: DateTime.now(),
+            lastMessage: msg,
+          );
+        }
+        return chat;
+      }).toList();
+      updatedChats.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      state = state.copyWith(chats: updatedChats);
     } catch (_) {}
   }
 

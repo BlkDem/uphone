@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
@@ -8,10 +9,16 @@ import 'package:uphone_client/features/chat/presentation/chat_screen.dart';
 import 'package:uphone_client/features/chat/presentation/chat_info_screen.dart';
 import 'package:uphone_client/features/chat/presentation/create_chat_screen.dart';
 
+final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
+  return GlobalKey<NavigatorState>();
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
+  final navKey = ref.watch(navigatorKeyProvider);
 
   return GoRouter(
+    navigatorKey: navKey,
     initialLocation: '/login',
     redirect: (context, state) {
       final isLoggedIn = authState.status == AuthStatus.authenticated;

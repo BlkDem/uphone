@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/uphone/server/internal/middleware"
+	"github.com/uphone/server/internal/webrtc"
 )
 
 var upgrader = websocket.Upgrader{
@@ -18,16 +20,17 @@ var upgrader = websocket.Upgrader{
 }
 
 type Handler struct {
-	repo *Repository
-	hub  *Hub
+	repo      *Repository
+	hub       *Hub
+	signalHub *webrtc.SignalHub
 }
 
-func NewHandler(repo *Repository, hub *Hub) *Handler {
-	return &Handler{repo: repo, hub: hub}
+func NewHandler(repo *Repository, hub *Hub, signalHub *webrtc.SignalHub) *Handler {
+	return &Handler{repo: repo, hub: hub, signalHub: signalHub}
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value("user_id").(string)
+	userID := middleware.GetUserID(r)
 	if userID == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -53,6 +56,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMessage) {
 	ctx := context.Background()
+	log.Printf("WS message: userID=%s type=%s", userID, msgType)
 	switch msgType {
 	case "message.send":
 		var req struct {
@@ -98,6 +102,16 @@ func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMes
 			return
 		}
 		_ = req
+
+	case "call-request", "call-accept", "call-reject", "call-end",
+		"offer", "answer", "ice-candidate":
+		var sigMsg webrtc.SignalMessage
+		if err := json.Unmarshal(raw, &sigMsg); err != nil {
+			return
+		}
+		h.signalHub.HandleSignal(userID, &sigMsg, func(targetUserID string, data []byte) {
+			h.hub.SendToUser(targetUserID, data)
+		})
 	}
 }
 

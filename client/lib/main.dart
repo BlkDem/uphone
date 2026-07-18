@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'features/calls/presentation/incoming_call_listener.dart';
 
 void main() {
   runApp(const ProviderScope(child: UPhoneApp()));
@@ -21,6 +22,7 @@ class UPhoneApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: router,
+      builder: (context, child) => IncomingCallListener(child: child ?? const SizedBox()),
     );
   }
 }

@@ -77,6 +77,7 @@ func (h *Hub) Run() {
 
 		case envelope := <-h.broadcast:
 			h.mu.RLock()
+			var stale []*Client
 			for userID, clients := range h.clients {
 				if len(envelope.UserIDs) > 0 {
 					found := false
@@ -100,12 +101,17 @@ func (h *Hub) Run() {
 					select {
 					case client.send <- data:
 					default:
-						close(client.send)
-						delete(clients, client)
+						stale = append(stale, client)
 					}
 				}
 			}
 			h.mu.RUnlock()
+
+			if len(stale) > 0 {
+				for _, client := range stale {
+					h.unregister <- client
+				}
+			}
 		}
 	}
 }
