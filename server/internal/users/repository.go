@@ -33,13 +33,17 @@ func (r *Repository) Create(ctx context.Context, user *User) error {
 
 func (r *Repository) GetByID(ctx context.Context, id string) (*User, error) {
 	user := &User{}
+	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
-		        status, COALESCE(last_seen,'0001-01-01'), created_at, updated_at
+		        status, last_seen, created_at, updated_at
 		 FROM users WHERE id = ?`, id).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
 		&user.DisplayName, &user.AvatarURL, &user.Status,
-		&user.LastSeen, &user.CreatedAt, &user.UpdatedAt)
+		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
+	if lastSeen.Valid {
+		user.LastSeen = lastSeen.Time
+	}
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
@@ -49,13 +53,17 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*User, error) {
 
 func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	user := &User{}
+	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
-		        status, COALESCE(last_seen,'0001-01-01'), created_at, updated_at
+		        status, last_seen, created_at, updated_at
 		 FROM users WHERE email = ?`, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
 		&user.DisplayName, &user.AvatarURL, &user.Status,
-		&user.LastSeen, &user.CreatedAt, &user.UpdatedAt)
+		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
+	if lastSeen.Valid {
+		user.LastSeen = lastSeen.Time
+	}
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
@@ -65,13 +73,17 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error
 
 func (r *Repository) GetByUsername(ctx context.Context, username string) (*User, error) {
 	user := &User{}
+	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
-		        status, COALESCE(last_seen,'0001-01-01'), created_at, updated_at
+		        status, last_seen, created_at, updated_at
 		 FROM users WHERE username = ?`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
 		&user.DisplayName, &user.AvatarURL, &user.Status,
-		&user.LastSeen, &user.CreatedAt, &user.UpdatedAt)
+		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
+	if lastSeen.Valid {
+		user.LastSeen = lastSeen.Time
+	}
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
@@ -98,7 +110,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, userID, status string) er
 func (r *Repository) Search(ctx context.Context, query string, limit int) ([]User, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, username, email, '', COALESCE(display_name,''), COALESCE(avatar_url,''),
-		        status, COALESCE(last_seen,'0001-01-01'), created_at, updated_at
+		        status, last_seen, created_at, updated_at
 		 FROM users
 		 WHERE username LIKE ? OR display_name LIKE ? OR email LIKE ?
 		 LIMIT ?`,
@@ -111,11 +123,15 @@ func (r *Repository) Search(ctx context.Context, query string, limit int) ([]Use
 	var users []User
 	for rows.Next() {
 		var u User
+		var lastSeen sql.NullTime
 		if err := rows.Scan(
 			&u.ID, &u.Username, &u.Email, &u.PasswordHash,
 			&u.DisplayName, &u.AvatarURL, &u.Status,
-			&u.LastSeen, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			&lastSeen, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if lastSeen.Valid {
+			u.LastSeen = lastSeen.Time
 		}
 		users = append(users, u)
 	}

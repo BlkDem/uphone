@@ -10,6 +10,10 @@ type contextKey string
 
 const userIDKey contextKey = "user_id"
 
+func SetUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
 type TokenValidator func(tokenString string) (string, error)
 
 func AuthMiddleware(validate TokenValidator) func(http.Handler) http.Handler {

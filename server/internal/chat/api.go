@@ -2,21 +2,42 @@ package chat
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 
+	"github.com/uphone/server/internal/middleware"
 	"github.com/uphone/server/internal/shared"
+	"github.com/uphone/server/internal/users"
 )
 
 type APIHandler struct {
-	repo *Repository
+	repo     *Repository
+	userRepo *users.Repository
 }
 
-func NewAPIHandler(repo *Repository) *APIHandler {
-	return &APIHandler{repo: repo}
+func NewAPIHandler(repo *Repository, userRepo *users.Repository) *APIHandler {
+	return &APIHandler{repo: repo, userRepo: userRepo}
+}
+
+func (h *APIHandler) resolveMembers(r *http.Request, members []string, selfID string) ([]string, error) {
+	resolved := make([]string, 0, len(members))
+	for _, m := range members {
+		if strings.Contains(m, "@") {
+			user, err := h.userRepo.GetByEmail(r.Context(), m)
+			if err != nil {
+				return nil, err
+			}
+			resolved = append(resolved, user.ID)
+		} else {
+			resolved = append(resolved, m)
+		}
+	}
+	return resolved, nil
 }
 
 func (h *APIHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := middleware.GetUserID(r)
 
 	var req CreateChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -29,12 +50,18 @@ func (h *APIHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resolvedMembers, err := h.resolveMembers(r, req.Members, userID)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	if req.Type == ChatTypePersonal {
-		if len(req.Members) != 1 {
+		if len(resolvedMembers) != 1 {
 			shared.WriteError(w, http.StatusBadRequest, "personal chat requires exactly 1 other member")
 			return
 		}
-		existing, _ := h.repo.GetPersonalChat(r.Context(), userID, req.Members[0])
+		existing, _ := h.repo.GetPersonalChat(r.Context(), userID, resolvedMembers[0])
 		if existing != nil {
 			shared.WriteJSON(w, http.StatusOK, existing)
 			return
@@ -49,7 +76,7 @@ func (h *APIHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chat.Members = append(chat.Members, Member{UserID: userID})
-	for _, memberID := range req.Members {
+	for _, memberID := range resolvedMembers {
 		if memberID != userID {
 			chat.Members = append(chat.Members, Member{UserID: memberID})
 		}
@@ -64,7 +91,7 @@ func (h *APIHandler) CreateChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) GetChats(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 
 	chats, err := h.repo.GetUserChats(r.Context(), userID)
 	if err != nil {
@@ -80,7 +107,7 @@ func (h *APIHandler) GetChats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) GetChat(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
@@ -99,7 +126,7 @@ func (h *APIHandler) GetChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
@@ -129,6 +156,7 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.SendMessage(r.Context(), msg); err != nil {
+		log.Printf("SendMessage error: chatID=%s userID=%s err=%v", chatID, userID, err)
 		shared.WriteError(w, http.StatusInternalServerError, "failed to send message")
 		return
 	}
@@ -137,7 +165,7 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
@@ -160,7 +188,7 @@ func (h *APIHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	msgID := r.PathValue("msgId")
 
 	msg, err := h.repo.GetMessageByID(r.Context(), msgID)
@@ -190,7 +218,7 @@ func (h *APIHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	msgID := r.PathValue("msgId")
 
 	msg, err := h.repo.GetMessageByID(r.Context(), msgID)
@@ -213,7 +241,7 @@ func (h *APIHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	msgID := r.PathValue("msgId")
 
 	var req ReactionRequest
@@ -231,7 +259,7 @@ func (h *APIHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
@@ -271,7 +299,7 @@ func (h *APIHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) AddMember(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	chat, err := h.repo.GetByID(r.Context(), chatID)
@@ -308,7 +336,7 @@ func (h *APIHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 	targetID := r.PathValue("memberId")
 
@@ -359,7 +387,7 @@ func (h *APIHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	chat, err := h.repo.GetByID(r.Context(), chatID)
@@ -388,7 +416,7 @@ func (h *APIHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
@@ -411,7 +439,7 @@ func (h *APIHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) DeleteChat(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(string)
+	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
 	role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)

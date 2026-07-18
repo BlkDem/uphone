@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,7 +41,7 @@ func main() {
 	chatRepo := chat.NewRepository(db)
 	chatHub := chat.NewHub()
 	go chatHub.Run()
-	chatAPI := chat.NewAPIHandler(chatRepo)
+	chatAPI := chat.NewAPIHandler(chatRepo, userRepo)
 	chatWS := chat.NewHandler(chatRepo, chatHub)
 
 	tokenValidator := func(tokenString string) (string, error) {
@@ -104,7 +103,7 @@ func main() {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), "user_id", userID)
+		ctx := middleware.SetUserID(r.Context(), userID)
 		chatWS.HandleWebSocket(w, r.WithContext(ctx))
 	})
 
