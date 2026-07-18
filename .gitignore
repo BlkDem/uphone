@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+vendor/
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Go
+server/server
+*.exe
+*.test
+*.out
+
+# Flutter
+client/.dart_tool/
+client/build/
+client/android/.gradle/
+client/android/app/build/
+client/ios/Pods/
+client/ios/Flutter/Flutter.framework
+client/ios/Flutter/Flutter.podspec
+
+# Docker
+docker/data/
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+*.cover
