@@ -125,6 +125,19 @@ func (h *Hub) IsOnline(userID string) bool {
 	return len(h.clients[userID]) > 0
 }
 
+func (h *Hub) SendToUser(userID string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if clients, ok := h.clients[userID]; ok {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
+}
+
 func (h *Hub) broadcastOnlineStatus(userID, status string) {
 	msg := &Envelope{
 		Type: "user." + status,
