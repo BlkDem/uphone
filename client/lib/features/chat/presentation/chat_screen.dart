@@ -5,6 +5,8 @@ import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_input.dart';
+import 'package:uphone_client/features/calls/domain/call_provider.dart';
+import 'package:uphone_client/features/calls/presentation/call_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -86,6 +88,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
+          if (currentChat.type == 'personal')
+            IconButton(
+              icon: const Icon(Icons.videocam_outlined),
+              onPressed: () => _startCall('video'),
+            ),
+          if (currentChat.type == 'personal')
+            IconButton(
+              icon: const Icon(Icons.call_outlined),
+              onPressed: () => _startCall('audio'),
+            ),
           if (currentChat.type != 'personal')
             IconButton(
               icon: const Icon(Icons.info_outline),
@@ -174,5 +186,60 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _addReaction(String msgId, String emoji) {
     ref.read(chatProvider.notifier).addReaction(widget.chatId, msgId, emoji);
+  }
+
+  void _startCall(String callType) async {
+    final authState = ref.read(authProvider);
+    final currentUserId = authState.user?.id ?? '';
+
+    String otherUserId = '';
+    String otherUserName = 'User';
+
+    final chatState = ref.read(chatProvider);
+    final currentChat = chatState.chats.firstWhere(
+      (c) => c.id == widget.chatId,
+      orElse: () => chatState.chats.isNotEmpty
+          ? chatState.chats.first
+          : throw Exception('Chat not found'),
+    );
+
+    if (currentChat.type == 'personal') {
+      final members = await ref.read(chatRepositoryProvider).getMembers(widget.chatId);
+      for (final m in members) {
+        final uid = m['user_id'] as String? ?? '';
+        if (uid != currentUserId && uid.isNotEmpty) {
+          otherUserId = uid;
+          otherUserName = m['username'] as String? ?? 'User';
+          break;
+        }
+      }
+    }
+
+    if (otherUserId.isEmpty) return;
+
+    final webrtc = ref.read(webRTCServiceProvider);
+    webrtc.init();
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          remoteUserId: otherUserId,
+          remoteUserName: otherUserName,
+          callType: callType,
+        ),
+      ),
+    );
+
+    try {
+      await webrtc.startCall(otherUserId, callType, chatId: widget.chatId);
+    } catch (e) {
+      debugPrint('startCall failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start call: $e')),
+        );
+      }
+    }
   }
 }

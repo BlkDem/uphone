@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/app_config.dart';
 
 typedef WSMessageHandler = void Function(Map<String, dynamic> message);
+typedef TokenProvider = Future<String?> Function();
 
 class WsClient {
   WebSocketChannel? _channel;
@@ -12,24 +13,64 @@ class WsClient {
   Timer? _reconnectTimer;
   Timer? _pingTimer;
   bool _shouldReconnect = true;
-  WSMessageHandler? _onMessage;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectDelay = 60;
+  static const int _maxReconnectAttempts = 5;
+  final Map<String, WSMessageHandler> _messageHandlers = {};
   WSMessageHandler? _onConnect;
   WSMessageHandler? _onDisconnect;
+  TokenProvider? _tokenProvider;
+
+  set onMessage(WSMessageHandler? handler) {
+    if (handler != null) {
+      _messageHandlers['_default'] = handler;
+    } else {
+      _messageHandlers.remove('_default');
+    }
+  }
+
+  void addHandler(String id, WSMessageHandler handler) {
+    _messageHandlers[id] = handler;
+  }
+
+  void removeHandler(String id) {
+    _messageHandlers.remove(id);
+  }
 
   void connect(String token, {
     WSMessageHandler? onMessage,
     WSMessageHandler? onConnect,
     WSMessageHandler? onDisconnect,
+    TokenProvider? tokenProvider,
   }) {
     _token = token;
-    _onMessage = onMessage;
+    _tokenProvider = tokenProvider;
+    if (onMessage != null) {
+      _messageHandlers['_default'] = onMessage;
+    }
     _onConnect = onConnect;
     _onDisconnect = onDisconnect;
     _shouldReconnect = true;
+    _reconnectAttempts = 0;
     _doConnect();
   }
 
-  void _doConnect() {
+  Future<void> _refreshTokenIfNeeded() async {
+    if (_tokenProvider == null) return;
+    final freshToken = await _tokenProvider!();
+    if (freshToken != null && freshToken.isNotEmpty && freshToken != _token) {
+      _token = freshToken;
+      _reconnectAttempts = 0;
+    }
+  }
+
+  void _doConnect() async {
+    await _refreshTokenIfNeeded();
+    if (_token == null || _token!.isEmpty) {
+      _scheduleReconnect();
+      return;
+    }
+
     try {
       final uri = Uri.parse('${AppConfig.wsUrl}?token=$_token');
       _channel = WebSocketChannel.connect(uri);
@@ -38,32 +79,51 @@ class WsClient {
         (data) {
           try {
             final msg = jsonDecode(data as String) as Map<String, dynamic>;
-            _onConnect?.call({});
-            _onMessage?.call(msg);
-          } catch (_) {}
+            print('WS RECV: type=${msg['type']} handlers=${_messageHandlers.keys.toList()}');
+            _reconnectAttempts = 0;
+            for (final entry in _messageHandlers.entries.toList()) {
+              try {
+                entry.value(msg);
+              } catch (e) {
+                print('WS handler "${entry.key}" error: $e');
+              }
+            }
+          } catch (e) {
+            print('WS parse error: $e');
+          }
         },
         onDone: () {
           _onDisconnect?.call({});
           _pingTimer?.cancel();
-          if (_shouldReconnect) {
-            _reconnectTimer = Timer(const Duration(seconds: 3), _doConnect);
-          }
+          _scheduleReconnect();
         },
         onError: (_) {
           _onDisconnect?.call({});
           _pingTimer?.cancel();
-          if (_shouldReconnect) {
-            _reconnectTimer = Timer(const Duration(seconds: 3), _doConnect);
-          }
+          _scheduleReconnect();
         },
       );
 
       _startPing();
     } catch (_) {
-      if (_shouldReconnect) {
-        _reconnectTimer = Timer(const Duration(seconds: 3), _doConnect);
-      }
+      _scheduleReconnect();
     }
+  }
+
+  void _scheduleReconnect() {
+    if (!_shouldReconnect) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _onDisconnect?.call({'reason': 'max_retries_exceeded'});
+      return;
+    }
+    final delay = _getReconnectDelay();
+    _reconnectTimer = Timer(Duration(seconds: delay), _doConnect);
+  }
+
+  int _getReconnectDelay() {
+    _reconnectAttempts++;
+    final delay = (2 * _reconnectAttempts).clamp(2, _maxReconnectDelay);
+    return delay;
   }
 
   void _startPing() {

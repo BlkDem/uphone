@@ -47,6 +47,11 @@ class ApiClient {
   }
 
   String? get accessToken => _accessToken;
+  String? get refreshToken => _refreshToken;
+
+  Future<void> refreshAccessToken() async {
+    await _tryRefresh();
+  }
 
   Future<bool> _tryRefresh() async {
     try {

@@ -61,7 +61,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: displayName,
       );
       _apiClient.setTokens(response.accessToken, response.refreshToken);
-      _wsClient.connect(response.accessToken);
+      _connectWs(response.accessToken);
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -85,7 +85,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
       );
       _apiClient.setTokens(response.accessToken, response.refreshToken);
-      _wsClient.connect(response.accessToken);
+      _connectWs(response.accessToken);
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -96,6 +96,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: _parseError(e),
       );
     }
+  }
+
+  void _connectWs(String accessToken) {
+    _wsClient.connect(
+      accessToken,
+      tokenProvider: () async {
+        await _apiClient.refreshAccessToken();
+        return _apiClient.accessToken;
+      },
+    );
   }
 
   Future<void> logout() async {
