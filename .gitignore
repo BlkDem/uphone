@@ -26,9 +26,11 @@ desktop.ini
 
 # Go
 server/server
+server/uphone
 *.exe
 *.test
 *.out
+*.sum
 
 # Flutter
 client/.dart_tool/
@@ -41,6 +43,9 @@ client/ios/Flutter/Flutter.podspec
 
 # Docker
 docker/data/
+
+# Uploads
+uploads/
 
 # Logs
 *.log

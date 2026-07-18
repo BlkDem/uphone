@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: uphone-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-uphone_root}
+      MYSQL_DATABASE: ${DB_NAME:-uphone}
+      MYSQL_USER: ${DB_USER:-uphone}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-uphone_secret}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ../server
+      dockerfile: ../docker/Dockerfile.server
+    container_name: uphone-server
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-uphone}
+      DB_PASSWORD: ${DB_PASSWORD:-uphone_secret}
+      DB_NAME: ${DB_NAME:-uphone}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      UPLOAD_DIR: /data/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads_data:/data/uploads
+
+volumes:
+  mariadb_data:
+  uploads_data:
