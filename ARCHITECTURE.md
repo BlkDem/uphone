@@ -149,11 +149,19 @@ GET    /api/v1/users/:id            # Профиль пользователя
 
 ### Chats
 ```
-POST   /api/v1/chats                # Создать чат (личный/групповой)
+POST   /api/v1/chats                # Создать чат (личный/групповой/канал)
 GET    /api/v1/chats                # Список чатов
 GET    /api/v1/chats/:id            # Информация о чате
-PUT    /api/v1/chats/:id            # Обновить чат
-DELETE /api/v1/chats/:id            # Удалить чат
+PUT    /api/v1/chats/:id            # Обновить чат (только owner/admin)
+DELETE /api/v1/chats/:id            # Удалить чат (только owner)
+```
+
+### Members (группы/каналы)
+```
+GET    /api/v1/chats/:id/members              # Список участников
+POST   /api/v1/chats/:id/members              # Добавить участника (admin+)
+DELETE /api/v1/chats/:id/members/:memberId    # Удалить участника (admin+)
+POST   /api/v1/chats/:id/leave                # Покинуть чат
 ```
 
 ### Messages

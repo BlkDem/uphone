@@ -229,3 +229,201 @@ func (h *APIHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 
 	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "reaction added"})
 }
+
+func (h *APIHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+
+	role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
+	if err != nil || (role != "owner" && role != "admin") {
+		shared.WriteError(w, http.StatusForbidden, "not authorized")
+		return
+	}
+
+	var req UpdateChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	chat, err := h.repo.GetByID(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "chat not found")
+		return
+	}
+
+	if req.Name != nil {
+		chat.Name = *req.Name
+	}
+	if req.Description != nil {
+		chat.Description = *req.Description
+	}
+	if req.AvatarURL != nil {
+		chat.AvatarURL = *req.AvatarURL
+	}
+
+	if err := h.repo.UpdateChat(r.Context(), chat); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to update chat")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, chat)
+}
+
+func (h *APIHandler) AddMember(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+
+	chat, err := h.repo.GetByID(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "chat not found")
+		return
+	}
+
+	if chat.Type == ChatTypePersonal {
+		shared.WriteError(w, http.StatusBadRequest, "cannot add members to personal chat")
+		return
+	}
+
+	callerRole, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
+	if err != nil || (callerRole != "owner" && callerRole != "admin") {
+		shared.WriteError(w, http.StatusForbidden, "not authorized to add members")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.repo.AddMember(r.Context(), chatID, req.UserID, "member"); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to add member")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "member added"})
+}
+
+func (h *APIHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+	targetID := r.PathValue("memberId")
+
+	chat, err := h.repo.GetByID(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "chat not found")
+		return
+	}
+
+	if chat.Type == ChatTypePersonal {
+		shared.WriteError(w, http.StatusBadRequest, "cannot remove members from personal chat")
+		return
+	}
+
+	callerRole, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
+	if err != nil {
+		shared.WriteError(w, http.StatusForbidden, "not authorized")
+		return
+	}
+
+	targetRole, err := h.repo.GetMemberRole(r.Context(), chatID, targetID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "member not found")
+		return
+	}
+
+	if targetRole == "owner" {
+		shared.WriteError(w, http.StatusForbidden, "cannot remove the owner")
+		return
+	}
+
+	if callerRole != "owner" && callerRole != "admin" {
+		shared.WriteError(w, http.StatusForbidden, "not authorized to remove members")
+		return
+	}
+
+	if callerRole == "admin" && targetRole == "admin" {
+		shared.WriteError(w, http.StatusForbidden, "admins cannot remove other admins")
+		return
+	}
+
+	if err := h.repo.RemoveMember(r.Context(), chatID, targetID); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to remove member")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "member removed"})
+}
+
+func (h *APIHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+
+	chat, err := h.repo.GetByID(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "chat not found")
+		return
+	}
+
+	if chat.Type == ChatTypePersonal {
+		shared.WriteError(w, http.StatusBadRequest, "cannot leave personal chat")
+		return
+	}
+
+	role, _ := h.repo.GetMemberRole(r.Context(), chatID, userID)
+	if role == "owner" {
+		shared.WriteError(w, http.StatusBadRequest, "owner cannot leave. Transfer ownership or delete.")
+		return
+	}
+
+	if err := h.repo.RemoveMember(r.Context(), chatID, userID); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to leave chat")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "left chat"})
+}
+
+func (h *APIHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+
+	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
+	if err != nil || !isMember {
+		shared.WriteError(w, http.StatusForbidden, "not a member")
+		return
+	}
+
+	members, err := h.repo.GetMembers(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to get members")
+		return
+	}
+
+	if members == nil {
+		members = []Member{}
+	}
+
+	shared.WriteJSON(w, http.StatusOK, members)
+}
+
+func (h *APIHandler) DeleteChat(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+	chatID := r.PathValue("id")
+
+	role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
+	if err != nil || role != "owner" {
+		shared.WriteError(w, http.StatusForbidden, "only owner can delete chat")
+		return
+	}
+
+	if err := h.repo.DeleteChat(r.Context(), chatID); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to delete chat")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "chat deleted"})
+}

@@ -5,6 +5,8 @@ import 'package:uphone_client/features/auth/presentation/login_screen.dart';
 import 'package:uphone_client/features/auth/presentation/register_screen.dart';
 import 'package:uphone_client/features/chat/presentation/chat_list_screen.dart';
 import 'package:uphone_client/features/chat/presentation/chat_screen.dart';
+import 'package:uphone_client/features/chat/presentation/chat_info_screen.dart';
+import 'package:uphone_client/features/chat/presentation/create_chat_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -38,8 +40,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ChatListScreen(),
       ),
       GoRoute(
+        path: '/chats/create',
+        builder: (context, state) => const CreateChatScreen(),
+      ),
+      GoRoute(
         path: '/chats/:chatId',
         builder: (context, state) => ChatScreen(
+          chatId: state.pathParameters['chatId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/chats/:chatId/info',
+        builder: (context, state) => ChatInfoScreen(
           chatId: state.pathParameters['chatId']!,
         ),
       ),

@@ -248,6 +248,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(chats: [chat, ...state.chats]);
     } catch (_) {}
   }
+
+  Future<void> createGroupChat({
+    required String name,
+    required String type,
+    required List<String> members,
+  }) async {
+    try {
+      final chat = await _repository.createChat(
+        type: type,
+        members: members,
+        name: name,
+      );
+      state = state.copyWith(chats: [chat, ...state.chats]);
+    } catch (_) {}
+  }
 }
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {

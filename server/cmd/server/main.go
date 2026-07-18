@@ -83,6 +83,13 @@ func main() {
 			api.HandleFunc("PUT /chats/{id}/messages/{msgId}", chatAPI.EditMessage)
 			api.HandleFunc("DELETE /chats/{id}/messages/{msgId}", chatAPI.DeleteMessage)
 			api.HandleFunc("POST /chats/{id}/messages/{msgId}/react", chatAPI.AddReaction)
+
+			api.HandleFunc("PUT /chats/{id}", chatAPI.UpdateChat)
+			api.HandleFunc("DELETE /chats/{id}", chatAPI.DeleteChat)
+			api.HandleFunc("GET /chats/{id}/members", chatAPI.GetMembers)
+			api.HandleFunc("POST /chats/{id}/members", chatAPI.AddMember)
+			api.HandleFunc("DELETE /chats/{id}/members/{memberId}", chatAPI.RemoveMember)
+			api.HandleFunc("POST /chats/{id}/leave", chatAPI.LeaveChat)
 		})
 	})
 
