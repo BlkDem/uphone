@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/shared/models/contact.dart';
 
@@ -146,7 +145,7 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
     setState(() => _isLoading = false);
 
     if (mounted) {
-      context.pop();
+      Navigator.of(context).pop();
     }
   }
 }
