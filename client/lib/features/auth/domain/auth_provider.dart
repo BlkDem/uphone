@@ -6,6 +6,7 @@ import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/core/config/server_config.dart';
 import 'package:uphone_client/shared/models/user.dart';
 import 'package:uphone_client/features/auth/data/auth_repository.dart';
+import 'package:uphone_client/core/config/remember_me_storage.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading }
 
@@ -180,6 +181,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {}
     _wsClient.disconnect();
     _apiClient.clearTokens();
+    await RememberMeStorage.instance.clear();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
 import '../../../core/config/server_config.dart';
+import '../../../core/config/remember_me_storage.dart';
 import '../../../core/utils/google_sign_in_helper.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -17,12 +18,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberMe = false;
   String? _selectedServerId;
 
   @override
   void initState() {
     super.initState();
     _selectedServerId = ServerConfig.instance.selected.id;
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final saved = await RememberMeStorage.instance.load();
+    if (saved != null && mounted) {
+      setState(() {
+        _rememberMe = true;
+        _emailController.text = saved.$1;
+        _passwordController.text = saved.$2;
+      });
+    }
   }
 
   @override
@@ -123,7 +137,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                      ),
+                      const Text('Remember me'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   FilledButton(
                     onPressed: authState.status == AuthStatus.loading
                         ? null
@@ -324,11 +348,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      if (_rememberMe) {
+        await RememberMeStorage.instance.save(email, password);
+      } else {
+        await RememberMeStorage.instance.clear();
+      }
+
       ref.read(authProvider.notifier).login(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
+            email: email,
+            password: password,
           );
     }
   }
