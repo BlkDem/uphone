@@ -1,14 +1,13 @@
 import 'package:dio/dio.dart';
-import '../config/app_config.dart';
 
 class ApiClient {
-  late final Dio _dio;
+  late Dio _dio;
   String? _accessToken;
   String? _refreshToken;
 
-  ApiClient() {
+  ApiClient(String baseUrl) {
     _dio = Dio(BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Content-Type': 'application/json'},

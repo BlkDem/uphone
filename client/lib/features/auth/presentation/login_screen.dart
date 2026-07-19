@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
+import '../../../core/config/server_config.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String? _selectedServerId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedServerId = ServerConfig.instance.selected.id;
+  }
 
   @override
   void dispose() {
@@ -71,7 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 32),
+                  _buildServerSelector(context),
+                  const SizedBox(height: 24),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -139,6 +149,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _buildServerSelector(BuildContext context) {
+    final servers = ServerConfig.instance.servers;
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
+          children: [
+            Icon(Icons.dns_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedServerId,
+                  isExpanded: true,
+                  items: servers.map((s) {
+                    return DropdownMenuItem(
+                      value: s.id,
+                      child: Text(
+                        s.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (id) async {
+                    if (id == null) return;
+                    await ServerConfig.instance.select(id);
+                    setState(() => _selectedServerId = id);
+                    ref.invalidate(apiClientProvider);
+                  },
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, size: 20),
+              tooltip: 'Manage servers',
+              onPressed: () => _showServerDialog(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showServerDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _ServerSheet(
+        onSelected: (id) async {
+          await ServerConfig.instance.select(id);
+          setState(() => _selectedServerId = id);
+          ref.invalidate(apiClientProvider);
+        },
+      ),
+    );
+  }
+
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
       ref.read(authProvider.notifier).login(
@@ -146,5 +215,255 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
     }
+  }
+}
+
+class _ServerSheet extends ConsumerStatefulWidget {
+  final void Function(String id) onSelected;
+
+  const _ServerSheet({required this.onSelected});
+
+  @override
+  ConsumerState<_ServerSheet> createState() => _ServerSheetState();
+}
+
+class _ServerSheetState extends ConsumerState<_ServerSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final servers = ServerConfig.instance.servers;
+    final selected = ServerConfig.instance.selected;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Servers',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+                onPressed: () => _showAddServer(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...servers.map((s) {
+            final isSelected = s.id == selected.id;
+            return Card(
+              child: ListTile(
+                leading: Icon(
+                  Icons.dns,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                title: Text(s.name),
+                subtitle: Text(s.apiBaseUrl),
+                trailing: isSelected
+                    ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  widget.onSelected(s.id);
+                  Navigator.pop(context);
+                },
+                onLongPress: s.id != 'default'
+                    ? () => _showEditServer(context, s)
+                    : null,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  void _showAddServer(BuildContext context) {
+    Navigator.pop(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _AddEditServerSheet(
+        onSave: (server) async {
+          await ServerConfig.instance.add(server);
+          widget.onSelected(server.id);
+          setState(() {});
+        },
+      ),
+    );
+  }
+
+  void _showEditServer(BuildContext context, ServerEntry server) {
+    Navigator.pop(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _AddEditServerSheet(
+        server: server,
+        onSave: (updated) async {
+          await ServerConfig.instance.update(updated);
+          setState(() {});
+        },
+        onDelete: () async {
+          await ServerConfig.instance.remove(server.id);
+          widget.onSelected(ServerConfig.instance.selected.id);
+          setState(() {});
+        },
+      ),
+    );
+  }
+}
+
+class _AddEditServerSheet extends StatefulWidget {
+  final ServerEntry? server;
+  final void Function(ServerEntry server) onSave;
+  final VoidCallback? onDelete;
+
+  const _AddEditServerSheet({
+    this.server,
+    required this.onSave,
+    this.onDelete,
+  });
+
+  @override
+  State<_AddEditServerSheet> createState() => _AddEditServerSheetState();
+}
+
+class _AddEditServerSheetState extends State<_AddEditServerSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _hostController;
+  late final TextEditingController _portController;
+  late bool _useTls;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.server?.name ?? '');
+    _hostController = TextEditingController(text: widget.server?.host ?? '');
+    _portController = TextEditingController(
+        text: (widget.server?.port ?? 8080).toString());
+    _useTls = widget.server?.useTls ?? false;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _hostController.dispose();
+    _portController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.server == null ? 'Add Server' : 'Edit Server',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                prefixIcon: Icon(Icons.label_outline),
+              ),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _hostController,
+              decoration: const InputDecoration(
+                labelText: 'Host',
+                hintText: '192.168.1.18',
+                prefixIcon: Icon(Icons.language),
+              ),
+              keyboardType: TextInputType.url,
+              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _portController,
+                    decoration: const InputDecoration(
+                      labelText: 'Port',
+                      prefixIcon: Icon(Icons.numbers),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      final n = int.tryParse(v.trim());
+                      if (n == null || n < 1 || n > 65535) return 'Invalid port';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SwitchListTile(
+                    title: const Text('TLS'),
+                    value: _useTls,
+                    onChanged: (v) => setState(() => _useTls = v),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (widget.onDelete != null)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Delete'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    onPressed: widget.onDelete,
+                  ),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _save,
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _save() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final port = int.tryParse(_portController.text.trim()) ?? 8080;
+    final server = ServerEntry(
+      id: widget.server?.id ?? ServerConfig.generateId(),
+      name: _nameController.text.trim(),
+      host: _hostController.text.trim(),
+      port: port,
+      useTls: _useTls,
+    );
+    widget.onSave(server);
+    Navigator.pop(context);
   }
 }

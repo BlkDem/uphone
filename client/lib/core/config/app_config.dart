@@ -8,4 +8,14 @@ class AppConfig {
     'WS_URL',
     defaultValue: 'ws://localhost:8080/ws',
   );
+
+  static String get defaultHost {
+    final uri = Uri.parse(apiBaseUrl);
+    return uri.host;
+  }
+
+  static int get defaultPort {
+    final uri = Uri.parse(apiBaseUrl);
+    return uri.port;
+  }
 }
