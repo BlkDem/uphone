@@ -249,37 +249,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      final name = nameCtrl.text.trim();
+                      final host = hostCtrl.text.trim();
+                      final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                      if (name.isEmpty || host.isEmpty) return;
+                      Navigator.pop(ctx);
+                      final server = ServerEntry(
+                        id: ServerConfig.generateId(),
+                        name: name,
+                        host: host,
+                        port: port,
+                        useTls: useTls,
+                      );
+                      ServerConfig.instance.add(server).then((_) {
+                        setState(() => _selectedServerId = server.id);
+                        ref.invalidate(apiClientProvider);
+                      });
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final host = hostCtrl.text.trim();
-                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
-                if (name.isEmpty || host.isEmpty) return;
-                Navigator.pop(ctx);
-                final server = ServerEntry(
-                  id: ServerConfig.generateId(),
-                  name: name,
-                  host: host,
-                  port: port,
-                  useTls: useTls,
-                );
-                ServerConfig.instance.add(server).then((_) {
-                  setState(() => _selectedServerId = server.id);
-                  ref.invalidate(apiClientProvider);
-                });
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -413,28 +418,36 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                 TextField(controller: portCtrl, decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()), keyboardType: TextInputType.number),
                 const SizedBox(height: 8),
                 Row(children: [const Text('TLS'), const Spacer(), Switch(value: useTls, onChanged: (v) => setDialogState(() => useTls = v))]),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      final name = nameCtrl.text.trim();
+                      final host = hostCtrl.text.trim();
+                      final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                      if (name.isEmpty || host.isEmpty) return;
+                      Navigator.pop(ctx);
+                      final server = ServerEntry(id: ServerConfig.generateId(), name: name, host: host, port: port, useTls: useTls);
+                      ServerConfig.instance.add(server).then((_) {
+                        widget.onSelected(server.id);
+                        widget.onChanged?.call();
+                      });
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final host = hostCtrl.text.trim();
-                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
-                if (name.isEmpty || host.isEmpty) return;
-                Navigator.pop(ctx);
-                final server = ServerEntry(id: ServerConfig.generateId(), name: name, host: host, port: port, useTls: useTls);
-                ServerConfig.instance.add(server).then((_) {
-                  widget.onSelected(server.id);
-                  widget.onChanged?.call();
-                });
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -462,25 +475,33 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                 TextField(controller: portCtrl, decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()), keyboardType: TextInputType.number),
                 const SizedBox(height: 8),
                 Row(children: [const Text('TLS'), const Spacer(), Switch(value: useTls, onChanged: (v) => setDialogState(() => useTls = v))]),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      final name = nameCtrl.text.trim();
+                      final host = hostCtrl.text.trim();
+                      final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                      if (name.isEmpty || host.isEmpty) return;
+                      Navigator.pop(ctx);
+                      final updated = server.copyWith(name: name, host: host, port: port, useTls: useTls);
+                      ServerConfig.instance.update(updated).then((_) => widget.onChanged?.call());
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final host = hostCtrl.text.trim();
-                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
-                if (name.isEmpty || host.isEmpty) return;
-                Navigator.pop(ctx);
-                final updated = server.copyWith(name: name, host: host, port: port, useTls: useTls);
-                ServerConfig.instance.update(updated).then((_) => widget.onChanged?.call());
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -492,20 +513,35 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete server?'),
-        content: Text('Remove "${server.name}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await ServerConfig.instance.remove(server.id);
-              widget.onSelected(ServerConfig.instance.selected.id);
-              widget.onChanged?.call();
-            },
-            child: const Text('Delete'),
+        content: SingleChildScrollView(
+          child: ListBody(
+            children: [
+              Text('Remove "${server.name}"?'),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await ServerConfig.instance.remove(server.id);
+                    widget.onSelected(ServerConfig.instance.selected.id);
+                    widget.onChanged?.call();
+                  },
+                  child: const Text('Delete'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
