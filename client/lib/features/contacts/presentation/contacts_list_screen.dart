@@ -2,8 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/features/contacts/presentation/contact_form_screen.dart';
+import 'package:uphone_client/shared/models/contact.dart';
 
 class ContactsListScreen extends ConsumerStatefulWidget {
   const ContactsListScreen({super.key});
@@ -34,6 +37,10 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/chats'),
+        ),
         title: _isSearching
             ? TextField(
                 controller: _searchController,
@@ -138,6 +145,9 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
                       contact: contact,
                       onEdit: () => _editContact(context, contact),
                       onDelete: () => _deleteContact(context, contact),
+                      onChat: () => _startChat(contact),
+                      onCall: () => _startCall(contact, false),
+                      onVideoCall: () => _startCall(contact, true),
                     );
                   },
                 ),
@@ -157,7 +167,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
     ).then((_) => ref.read(contactsProvider.notifier).refreshContacts());
   }
 
-  void _editContact(BuildContext context, dynamic contact) {
+  void _editContact(BuildContext context, Contact contact) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -166,7 +176,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
     ).then((_) => ref.read(contactsProvider.notifier).refreshContacts());
   }
 
-  void _deleteContact(BuildContext context, dynamic contact) {
+  void _deleteContact(BuildContext context, Contact contact) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -195,6 +205,36 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
         ],
       ),
     );
+  }
+
+  void _startChat(Contact contact) async {
+    if (contact.email == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contact has no email to start a chat')),
+        );
+      }
+      return;
+    }
+    await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
+    if (mounted) {
+      context.go('/chats');
+    }
+  }
+
+  void _startCall(Contact contact, bool isVideo) async {
+    if (contact.email == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contact has no email to call')),
+        );
+      }
+      return;
+    }
+    await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
+    if (mounted) {
+      context.go('/chats');
+    }
   }
 
   void _handleMenuAction(String action) async {
@@ -228,7 +268,6 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
 
   void _showImportDialog(BuildContext context, String format) async {
     final notifier = ref.read(contactsProvider.notifier);
-    // For web: use a text input as import method
     final controller = TextEditingController();
 
     final result = await showDialog<String>(
@@ -288,59 +327,103 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
 }
 
 class ContactTile extends StatelessWidget {
-  final dynamic contact;
+  final Contact contact;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onChat;
+  final VoidCallback onCall;
+  final VoidCallback onVideoCall;
 
   const ContactTile({
     super.key,
     required this.contact,
     required this.onEdit,
     required this.onDelete,
+    required this.onChat,
+    required this.onCall,
+    required this.onVideoCall,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        child: Text(
-          contact.displayName.isNotEmpty
-              ? contact.displayName[0].toUpperCase()
-              : '?',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-            fontWeight: FontWeight.bold,
-          ),
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text(
+                contact.displayName.isNotEmpty
+                    ? contact.displayName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  color: theme.colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contact.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  if (contact.email != null || contact.phone != null)
+                    Text(
+                      contact.email ?? contact.phone ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+              tooltip: 'Chat',
+              onPressed: onChat,
+              color: theme.colorScheme.primary,
+            ),
+            IconButton(
+              icon: const Icon(Icons.phone_outlined, size: 20),
+              tooltip: 'Call',
+              onPressed: onCall,
+              color: theme.colorScheme.primary,
+            ),
+            IconButton(
+              icon: const Icon(Icons.videocam_outlined, size: 20),
+              tooltip: 'Video Call',
+              onPressed: onVideoCall,
+              color: theme.colorScheme.primary,
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') onEdit();
+                if (value == 'delete') onDelete();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Delete', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          ],
         ),
-      ),
-      title: Text(
-        contact.displayName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(
-        contact.email ?? contact.phone ?? '',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (value) {
-          if (value == 'edit') onEdit();
-          if (value == 'delete') onDelete();
-        },
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'edit', child: Text('Edit')),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
       ),
     );
   }
