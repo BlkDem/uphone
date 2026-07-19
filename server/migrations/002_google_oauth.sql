@@ -1,0 +1,3 @@
+-- Google OAuth support: already applied manually.
+-- The columns google_id and nullable password_hash are in place.
+-- Future fresh installs will need 001_init.sql updated instead.

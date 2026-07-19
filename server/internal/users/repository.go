@@ -23,10 +23,10 @@ func (r *Repository) Create(ctx context.Context, user *User) error {
 	user.UpdatedAt = time.Now().UTC()
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO users (id, username, email, password_hash, display_name, status, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (id, username, email, password_hash, google_id, display_name, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		user.ID, user.Username, user.Email, user.PasswordHash,
-		user.DisplayName, "offline", user.CreatedAt, user.UpdatedAt)
+		user.GoogleID, user.DisplayName, "offline", user.CreatedAt, user.UpdatedAt)
 
 	return err
 }
@@ -35,11 +35,11 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*User, error) {
 	user := &User{}
 	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
+		`SELECT id, username, email, password_hash, google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),
 		        status, last_seen, created_at, updated_at
 		 FROM users WHERE id = ?`, id).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.DisplayName, &user.AvatarURL, &user.Status,
+		&user.GoogleID, &user.DisplayName, &user.AvatarURL, &user.Status,
 		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
 	if lastSeen.Valid {
 		user.LastSeen = lastSeen.Time
@@ -55,11 +55,11 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error
 	user := &User{}
 	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
+		`SELECT id, username, email, password_hash, google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),
 		        status, last_seen, created_at, updated_at
 		 FROM users WHERE email = ?`, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.DisplayName, &user.AvatarURL, &user.Status,
+		&user.GoogleID, &user.DisplayName, &user.AvatarURL, &user.Status,
 		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
 	if lastSeen.Valid {
 		user.LastSeen = lastSeen.Time
@@ -75,11 +75,11 @@ func (r *Repository) GetByUsername(ctx context.Context, username string) (*User,
 	user := &User{}
 	var lastSeen sql.NullTime
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, username, email, password_hash, COALESCE(display_name,''), COALESCE(avatar_url,''),
+		`SELECT id, username, email, password_hash, google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),
 		        status, last_seen, created_at, updated_at
 		 FROM users WHERE username = ?`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.DisplayName, &user.AvatarURL, &user.Status,
+		&user.GoogleID, &user.DisplayName, &user.AvatarURL, &user.Status,
 		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
 	if lastSeen.Valid {
 		user.LastSeen = lastSeen.Time
@@ -109,7 +109,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, userID, status string) er
 
 func (r *Repository) Search(ctx context.Context, query string, limit int) ([]User, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, username, email, '', COALESCE(display_name,''), COALESCE(avatar_url,''),
+		`SELECT id, username, email, '', google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),
 		        status, last_seen, created_at, updated_at
 		 FROM users
 		 WHERE username LIKE ? OR display_name LIKE ? OR email LIKE ?
@@ -126,7 +126,7 @@ func (r *Repository) Search(ctx context.Context, query string, limit int) ([]Use
 		var lastSeen sql.NullTime
 		if err := rows.Scan(
 			&u.ID, &u.Username, &u.Email, &u.PasswordHash,
-			&u.DisplayName, &u.AvatarURL, &u.Status,
+			&u.GoogleID, &u.DisplayName, &u.AvatarURL, &u.Status,
 			&lastSeen, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -136,4 +136,31 @@ func (r *Repository) Search(ctx context.Context, query string, limit int) ([]Use
 		users = append(users, u)
 	}
 	return users, nil
+}
+
+func (r *Repository) GetByGoogleID(ctx context.Context, googleID string) (*User, error) {
+	user := &User{}
+	var lastSeen sql.NullTime
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, username, email, password_hash, google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),
+		        status, last_seen, created_at, updated_at
+		 FROM users WHERE google_id = ?`, googleID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
+		&user.GoogleID, &user.DisplayName, &user.AvatarURL, &user.Status,
+		&lastSeen, &user.CreatedAt, &user.UpdatedAt)
+	if lastSeen.Valid {
+		user.LastSeen = lastSeen.Time
+	}
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found")
+	}
+	return user, err
+}
+
+func (r *Repository) LinkGoogleID(ctx context.Context, userID, googleID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET google_id = ?, updated_at = ? WHERE id = ?`,
+		googleID, time.Now().UTC(), userID)
+	return err
 }

@@ -207,3 +207,30 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	shared.WriteJSON(w, http.StatusOK, user)
 }
+
+func (h *Handler) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDToken string `json:"id_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.IDToken == "" {
+		shared.WriteError(w, http.StatusBadRequest, "id_token is required")
+		return
+	}
+
+	resp, err := h.service.GoogleSignIn(r.Context(), req.IDToken)
+	if err != nil {
+		if errors.Is(err, ErrGoogleAuthFailed) {
+			shared.WriteError(w, http.StatusUnauthorized, "google authentication failed")
+			return
+		}
+		shared.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, resp)
+}

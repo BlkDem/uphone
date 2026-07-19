@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uphone_client/core/network/api_client.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/core/config/server_config.dart';
@@ -44,13 +45,59 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.read(apiClientProvider).dio);
 });
 
+final googleSignInProvider = Provider<GoogleSignIn>((ref) {
+  return GoogleSignIn.instance;
+});
+
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repository;
   final ApiClient _apiClient;
   final WsClient _wsClient;
+  final GoogleSignIn _googleSignIn;
+  bool _googleListenerSetup = false;
 
-  AuthNotifier(this._repository, this._apiClient, this._wsClient)
-      : super(const AuthState());
+  AuthNotifier(this._repository, this._apiClient, this._wsClient, this._googleSignIn)
+      : super(const AuthState()) {
+    _setupGoogleListener();
+  }
+
+  void _setupGoogleListener() {
+    if (_googleListenerSetup) return;
+    _googleListenerSetup = true;
+    _googleSignIn.authenticationEvents.listen((event) {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        _handleGoogleSignInEvent(event.user);
+      }
+    });
+  }
+
+  Future<void> _handleGoogleSignInEvent(GoogleSignInAccount account) async {
+    state = state.copyWith(status: AuthStatus.loading, error: null);
+    try {
+      final idToken = account.authentication.idToken;
+
+      if (idToken == null) {
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          error: 'Failed to get Google ID token',
+        );
+        return;
+      }
+
+      final response = await _repository.googleSignIn(idToken);
+      _apiClient.setTokens(response.accessToken, response.refreshToken);
+      _connectWs(response.accessToken);
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        user: response.user,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        error: _parseError(e),
+      );
+    }
+  }
 
   Future<void> register({
     required String username,
@@ -104,6 +151,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> googleSignIn() async {
+    state = state.copyWith(status: AuthStatus.loading, error: null);
+    try {
+      await _googleSignIn.attemptLightweightAuthentication();
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        error: _parseError(e),
+      );
+    }
+  }
+
   void _connectWs(String accessToken) {
     _wsClient.connect(
       accessToken,
@@ -131,6 +190,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return data['error'] as String;
       }
     }
+    if (e is GoogleSignInException) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        return 'Google sign-in was cancelled';
+      }
+      return e.description ?? 'Google sign-in failed';
+    }
     return 'An error occurred';
   }
 }
@@ -140,5 +205,6 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
     ref.read(authRepositoryProvider),
     ref.read(apiClientProvider),
     ref.read(wsClientProvider),
+    ref.read(googleSignInProvider),
   );
 });

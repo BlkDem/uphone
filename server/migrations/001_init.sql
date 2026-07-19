@@ -2,13 +2,15 @@ CREATE TABLE IF NOT EXISTS users (
     id CHAR(36) PRIMARY KEY,
     username VARCHAR(30) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NULL,
+    google_id VARCHAR(255) NULL,
     display_name VARCHAR(100),
     avatar_url TEXT,
     status VARCHAR(20) DEFAULT 'offline',
     last_seen DATETIME(3),
     created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    UNIQUE KEY idx_users_google_id (google_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS chats (

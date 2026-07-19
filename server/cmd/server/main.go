@@ -38,7 +38,7 @@ func main() {
 	absUploadDir, _ := filepath.Abs(cfg.UploadDir)
 
 	userRepo := users.NewRepository(db)
-	authService := auth.NewService(userRepo, cfg.JWTSecret)
+	authService := auth.NewService(userRepo, cfg.JWTSecret, cfg.GoogleClientID)
 	authHandler := auth.NewHandler(authService)
 
 	chatRepo := chat.NewRepository(db)
@@ -69,6 +69,7 @@ func main() {
 	r.Route("/api/v1", func(api chi.Router) {
 		api.HandleFunc("POST /auth/register", authHandler.Register)
 		api.HandleFunc("POST /auth/login", authHandler.Login)
+		api.HandleFunc("POST /auth/google", authHandler.GoogleSignIn)
 		api.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 
 		api.Group(func(api chi.Router) {

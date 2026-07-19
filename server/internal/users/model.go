@@ -3,16 +3,17 @@ package users
 import "time"
 
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	DisplayName  string    `json:"display_name"`
-	AvatarURL    string    `json:"avatar_url,omitempty"`
-	Status       string    `json:"status"`
-	LastSeen     time.Time `json:"last_seen"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string     `json:"id"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	PasswordHash *string    `json:"-"`
+	GoogleID     *string    `json:"-"`
+	DisplayName  string     `json:"display_name"`
+	AvatarURL    string     `json:"avatar_url,omitempty"`
+	Status       string     `json:"status"`
+	LastSeen     time.Time  `json:"last_seen"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 type CreateUserRequest struct {

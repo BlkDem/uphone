@@ -8,20 +8,26 @@ import (
 )
 
 func Migrate(db *sql.DB) error {
-	migrationPath := "migrations/001_init.sql"
-	data, err := os.ReadFile(migrationPath)
-	if err != nil {
-		return fmt.Errorf("read migration file: %w", err)
+	migrations := []string{
+		"migrations/001_init.sql",
+		"migrations/002_google_oauth.sql",
 	}
 
-	statements := splitStatements(string(data))
-	for _, stmt := range statements {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
+	for _, migrationPath := range migrations {
+		data, err := os.ReadFile(migrationPath)
+		if err != nil {
+			return fmt.Errorf("read migration file %s: %w", migrationPath, err)
 		}
-		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("run migration statement: %s: %w", truncate(stmt, 100), err)
+
+		statements := splitStatements(string(data))
+		for _, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("run migration statement from %s: %s: %w", migrationPath, truncate(stmt, 100), err)
+			}
 		}
 	}
 
