@@ -330,14 +330,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (_) {}
   }
 
-  Future<void> createPersonalChat(String userEmail) async {
+  Future<Chat?> createPersonalChat(String userEmail) async {
     try {
       final chat = await _repository.createChat(
         type: 'personal',
         members: [userEmail],
       );
-      state = state.copyWith(chats: [chat, ...state.chats]);
-    } catch (_) {}
+      final alreadyExists = state.chats.any((c) => c.id == chat.id);
+      if (!alreadyExists) {
+        state = state.copyWith(chats: [chat, ...state.chats]);
+      }
+      return chat;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> createGroupChat({

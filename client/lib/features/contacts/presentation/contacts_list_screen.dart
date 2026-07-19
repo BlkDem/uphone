@@ -3,6 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uphone_client/features/auth/domain/auth_provider.dart';
+import 'package:uphone_client/features/calls/domain/call_provider.dart';
+import 'package:uphone_client/features/calls/presentation/call_screen.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/features/contacts/presentation/contact_form_screen.dart';
@@ -216,9 +219,9 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
       }
       return;
     }
-    await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
-    if (mounted) {
-      context.go('/chats');
+    final chat = await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
+    if (mounted && chat != null) {
+      context.go('/chats/${chat.id}');
     }
   }
 
@@ -231,9 +234,68 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
       }
       return;
     }
-    await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
-    if (mounted) {
-      context.go('/chats');
+    final chat = await ref.read(chatProvider.notifier).createPersonalChat(contact.email!);
+    if (chat == null || !mounted) return;
+
+    final authState = ref.read(authProvider);
+    final currentUserId = authState.user?.id ?? '';
+
+    String otherUserId = '';
+    String otherUserName = contact.displayName;
+
+    try {
+      final members = await ref.read(chatRepositoryProvider).getMembers(chat.id);
+      for (final m in members) {
+        final uid = m['user_id'] as String? ?? '';
+        if (uid != currentUserId && uid.isNotEmpty) {
+          otherUserId = uid;
+          otherUserName = m['username'] as String? ?? contact.displayName;
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to get chat members: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to start call')),
+        );
+      }
+      return;
+    }
+
+    if (otherUserId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not find user to call')),
+        );
+      }
+      return;
+    }
+
+    final callType = isVideo ? 'video' : 'audio';
+    final webrtc = ref.read(webRTCServiceProvider);
+    webrtc.init();
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          remoteUserId: otherUserId,
+          remoteUserName: otherUserName,
+          callType: callType,
+        ),
+      ),
+    );
+
+    try {
+      await webrtc.startCall(otherUserId, callType, chatId: chat.id);
+    } catch (e) {
+      debugPrint('startCall failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start call: $e')),
+        );
+      }
     }
   }
 
