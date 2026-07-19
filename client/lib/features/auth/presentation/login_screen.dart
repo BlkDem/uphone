@@ -184,31 +184,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              tooltip: 'Add server',
-              onPressed: () => _showAddServer(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(Icons.edit, size: 20),
               tooltip: 'Manage servers',
               onPressed: () => _showServerDialog(context),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showAddServer(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _AddEditServerSheet(
-        onSave: (server) async {
-          await ServerConfig.instance.add(server);
-          setState(() => _selectedServerId = server.id);
-          ref.invalidate(apiClientProvider);
-        },
       ),
     );
   }
@@ -223,7 +204,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           setState(() => _selectedServerId = id);
           ref.invalidate(apiClientProvider);
         },
-        onChanged: () => setState(() {}),
       ),
     );
   }
@@ -240,9 +220,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
 class _ServerSheet extends ConsumerStatefulWidget {
   final void Function(String id) onSelected;
-  final VoidCallback? onChanged;
 
-  const _ServerSheet({required this.onSelected, this.onChanged});
+  const _ServerSheet({required this.onSelected});
 
   @override
   ConsumerState<_ServerSheet> createState() => _ServerSheetState();
@@ -287,30 +266,16 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                 ),
                 title: Text(s.name),
                 subtitle: Text(s.apiBaseUrl),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isSelected)
-                      Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary),
-                    if (s.id != 'default') ...[
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20),
-                        tooltip: 'Edit',
-                        onPressed: () => _showEditServer(context, s),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        tooltip: 'Delete',
-                        onPressed: () => _confirmDelete(context, s),
-                      ),
-                    ],
-                  ],
-                ),
+                trailing: isSelected
+                    ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                    : null,
                 onTap: () {
                   widget.onSelected(s.id);
                   Navigator.pop(context);
                 },
+                onLongPress: s.id != 'default'
+                    ? () => _showEditServer(context, s)
+                    : null,
               ),
             );
           }),
@@ -328,7 +293,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
         onSave: (server) async {
           await ServerConfig.instance.add(server);
           widget.onSelected(server.id);
-          widget.onChanged?.call();
+          setState(() {});
         },
       ),
     );
@@ -343,37 +308,13 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
         server: server,
         onSave: (updated) async {
           await ServerConfig.instance.update(updated);
-          widget.onChanged?.call();
+          setState(() {});
         },
         onDelete: () async {
           await ServerConfig.instance.remove(server.id);
           widget.onSelected(ServerConfig.instance.selected.id);
-          widget.onChanged?.call();
+          setState(() {});
         },
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context, ServerEntry server) {
-    Navigator.pop(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete server?'),
-        content: Text('Remove "${server.name}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await ServerConfig.instance.remove(server.id);
-              widget.onSelected(ServerConfig.instance.selected.id);
-              widget.onChanged?.call();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }
