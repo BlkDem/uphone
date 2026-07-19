@@ -380,3 +380,93 @@ func (r *Repository) getSenderInfo(_ context.Context, userID string) (*Sender, e
 	}
 	return s, nil
 }
+
+func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, mediaType string, limit, offset int) ([]Message, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `SELECT m.id, m.chat_id, m.sender_id, COALESCE(m.content,''), m.type,
+		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
+		        m.created_at, m.updated_at,
+		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
+		 FROM messages m
+		 LEFT JOIN users u ON m.sender_id = u.id
+		 WHERE m.chat_id = ? AND m.is_deleted = FALSE AND m.type != 'text'`
+	args := []interface{}{chatID}
+
+	if mediaType != "" {
+		query += " AND m.type = ?"
+		args = append(args, mediaType)
+	}
+
+	query += " ORDER BY m.created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		var senderID, username, displayName, avatarURL sql.NullString
+		var replyTo sql.NullString
+
+		if err := rows.Scan(
+			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
+			&msg.FileURL, &replyTo, &msg.IsPinned, &msg.IsDeleted,
+			&msg.CreatedAt, &msg.UpdatedAt,
+			&senderID, &username, &displayName, &avatarURL); err != nil {
+			return nil, err
+		}
+
+		if replyTo.Valid {
+			msg.ReplyTo = replyTo.String
+		}
+		if senderID.Valid {
+			msg.Sender = &Sender{
+				ID:          senderID.String,
+				Username:    username.String,
+				DisplayName: displayName.String,
+				AvatarURL:   avatarURL.String,
+			}
+		}
+
+		messages = append(messages, msg)
+	}
+	return messages, nil
+}
+
+func (r *Repository) ForwardMessage(ctx context.Context, targetChatID string, msg *Message) error {
+	msg.ID = uuid.New().String()
+	msg.ChatID = targetChatID
+	msg.CreatedAt = time.Now().UTC()
+	msg.UpdatedAt = time.Now().UTC()
+
+	var replyTo interface{} = nil
+	if msg.ReplyTo != "" {
+		replyTo = msg.ReplyTo
+	}
+	var fileURL interface{} = nil
+	if msg.FileURL != "" {
+		fileURL = msg.FileURL
+	}
+
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, reply_to, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		msg.ID, msg.ChatID, msg.SenderID, msg.Content, msg.Type,
+		fileURL, replyTo, msg.CreatedAt, msg.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("insert message: %w", err)
+	}
+
+	_, _ = r.db.ExecContext(ctx,
+		`UPDATE chats SET updated_at = ? WHERE id = ?`,
+		msg.UpdatedAt, targetChatID)
+
+	return nil
+}

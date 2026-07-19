@@ -6,8 +6,11 @@ import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_input.dart';
+import 'package:uphone_client/features/chat/presentation/widgets/forward_message_sheet.dart';
+import 'package:uphone_client/features/chat/presentation/media_viewer_screen.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
 import 'package:uphone_client/features/calls/presentation/call_screen.dart';
+import 'package:uphone_client/shared/models/chat.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -89,6 +92,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.photo_library_outlined),
+            onPressed: () => context.go('/chats/${widget.chatId}/gallery'),
+          ),
           if (currentChat.type == 'personal')
             IconButton(
               icon: const Icon(Icons.videocam_outlined),
@@ -129,6 +136,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onEdit: isMe ? () => _startEdit(msg.id) : null,
                         onDelete: isMe ? () => _deleteMessage(msg.id) : null,
                         onReact: (emoji) => _addReaction(msg.id, emoji),
+                        onForward: () => _forwardMessage(msg.id),
+                        onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
+                            ? () => _openImage(msg)
+                            : null,
                       );
                     },
                   ),
@@ -193,6 +204,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _addReaction(String msgId, String emoji) {
     ref.read(chatProvider.notifier).addReaction(widget.chatId, msgId, emoji);
+  }
+
+  void _forwardMessage(String msgId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ForwardMessageSheet(
+        sourceChatId: widget.chatId,
+        messageId: msgId,
+      ),
+    );
+  }
+
+  void _openImage(ChatMessage msg) {
+    final currentChatState = ref.read(chatProvider);
+    final images = currentChatState.messages
+        .where((m) => m.type == 'image' && m.fileUrl.isNotEmpty)
+        .toList();
+    final initialIndex = images.indexOf(msg);
+    if (initialIndex < 0) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MediaViewerScreen(
+          messages: images,
+          initialIndex: initialIndex,
+          chatId: widget.chatId,
+        ),
+      ),
+    );
   }
 
   void _startCall(String callType) async {

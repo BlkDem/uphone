@@ -10,6 +10,8 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final Function(String)? onReact;
+  final VoidCallback? onForward;
+  final VoidCallback? onTapImage;
 
   const MessageBubble({
     super.key,
@@ -19,6 +21,8 @@ class MessageBubble extends StatelessWidget {
     this.onEdit,
     this.onDelete,
     this.onReact,
+    this.onForward,
+    this.onTapImage,
   });
 
   @override
@@ -135,7 +139,9 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildFilePreview(BuildContext context) {
     if (message.type == 'image') {
-      return ClipRRect(
+      return GestureDetector(
+        onTap: onTapImage,
+        child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: CachedNetworkImage(
           imageUrl: message.fileUrl,
@@ -166,6 +172,7 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+      ),
       );
     }
 
@@ -210,7 +217,8 @@ class MessageBubble extends StatelessWidget {
   }
 
   void _showContextMenu(BuildContext context) {
-    if (onEdit == null && onDelete == null) return;
+    final hasActions = onEdit != null || onDelete != null || onForward != null;
+    if (!hasActions) return;
 
     showModalBottomSheet(
       context: context,
@@ -218,6 +226,15 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onForward != null)
+              ListTile(
+                leading: const Icon(Icons.forward),
+                title: const Text('Forward'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onForward?.call();
+                },
+              ),
             if (onEdit != null)
               ListTile(
                 leading: const Icon(Icons.edit),
