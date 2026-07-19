@@ -207,7 +207,10 @@ class MessageBubble extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          buildVideoPlayer(message.fileUrl),
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: buildVideoPlayer(message.fileUrl),
+          ),
           const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
