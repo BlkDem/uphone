@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
 import '../../../core/config/server_config.dart';
+import '../../../core/utils/google_sign_in_helper.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -135,6 +136,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         : const Text('Sign In'),
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'or',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  buildGoogleSignInButton(),
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () => context.go('/register'),

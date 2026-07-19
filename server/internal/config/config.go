@@ -6,10 +6,11 @@ import (
 )
 
 type Config struct {
-	ServerPort int
-	DB         DBConfig
-	JWTSecret  string
-	UploadDir  string
+	ServerPort     int
+	DB             DBConfig
+	JWTSecret      string
+	UploadDir      string
+	GoogleClientID string
 }
 
 type DBConfig struct {
@@ -30,8 +31,9 @@ func Load() *Config {
 			Password: getEnv("DB_PASSWORD", "uphone_secret"),
 			Name:     getEnv("DB_NAME", "uphone"),
 		},
-		JWTSecret: getEnv("JWT_SECRET", "change-me-in-production"),
-		UploadDir: getEnv("UPLOAD_DIR", "./uploads"),
+		JWTSecret:      getEnv("JWT_SECRET", "change-me-in-production"),
+		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
+		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 	}
 }
 

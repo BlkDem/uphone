@@ -2,8 +2,12 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -16,6 +20,7 @@ var (
 	ErrUserExists         = errors.New("user already exists")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrExpiredToken       = errors.New("token expired")
+	ErrGoogleAuthFailed   = errors.New("google authentication failed")
 )
 
 type Claims struct {
@@ -24,18 +29,20 @@ type Claims struct {
 }
 
 type Service struct {
-	userRepo   *users.Repository
-	jwtSecret  []byte
-	accessTTL  time.Duration
-	refreshTTL time.Duration
+	userRepo       *users.Repository
+	jwtSecret      []byte
+	accessTTL      time.Duration
+	refreshTTL     time.Duration
+	googleClientID string
 }
 
-func NewService(userRepo *users.Repository, jwtSecret string) *Service {
+func NewService(userRepo *users.Repository, jwtSecret string, googleClientID string) *Service {
 	return &Service{
-		userRepo:   userRepo,
-		jwtSecret:  []byte(jwtSecret),
-		accessTTL:  15 * time.Minute,
-		refreshTTL: 7 * 24 * time.Hour,
+		userRepo:       userRepo,
+		jwtSecret:      []byte(jwtSecret),
+		accessTTL:      15 * time.Minute,
+		refreshTTL:     7 * 24 * time.Hour,
+		googleClientID: googleClientID,
 	}
 }
 
@@ -55,10 +62,11 @@ func (s *Service) Register(ctx context.Context, req users.CreateUserRequest) (*u
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
+	hashStr := string(hash)
 	user := &users.User{
 		Username:     req.Username,
 		Email:        req.Email,
-		PasswordHash: string(hash),
+		PasswordHash: &hashStr,
 		DisplayName:  req.DisplayName,
 		Status:       "offline",
 	}
@@ -80,13 +88,119 @@ func (s *Service) Login(ctx context.Context, req users.LoginRequest) (*users.Aut
 		return nil, ErrInvalidCredentials
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if user.PasswordHash == nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
 	_ = s.userRepo.UpdateStatus(ctx, user.ID, "online")
 
 	return s.generateTokens(user)
+}
+
+func (s *Service) GoogleSignIn(ctx context.Context, idToken string) (*users.AuthResponse, error) {
+	googleUser, err := s.verifyGoogleToken(idToken)
+	if err != nil {
+		return nil, ErrGoogleAuthFailed
+	}
+
+	user, err := s.userRepo.GetByGoogleID(ctx, googleUser.Sub)
+	if err == nil {
+		_ = s.userRepo.UpdateStatus(ctx, user.ID, "online")
+		return s.generateTokens(user)
+	}
+
+	user, err = s.userRepo.GetByEmail(ctx, googleUser.Email)
+	if err == nil {
+		if err := s.userRepo.LinkGoogleID(ctx, user.ID, googleUser.Sub); err != nil {
+			return nil, fmt.Errorf("link google id: %w", err)
+		}
+		_ = s.userRepo.UpdateStatus(ctx, user.ID, "online")
+		return s.generateTokens(user)
+	}
+
+	username := generateUsername(googleUser.Email, googleUser.Name)
+	newUser := &users.User{
+		Username:    username,
+		Email:       googleUser.Email,
+		GoogleID:    &googleUser.Sub,
+		DisplayName: googleUser.Name,
+		AvatarURL:   googleUser.Picture,
+		Status:      "offline",
+	}
+
+	if err := s.userRepo.Create(ctx, newUser); err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	_ = s.userRepo.UpdateStatus(ctx, newUser.ID, "online")
+	return s.generateTokens(newUser)
+}
+
+type googleTokenInfo struct {
+	Sub     string `json:"sub"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
+	Aud     string `json:"aud"`
+}
+
+func (s *Service) verifyGoogleToken(idToken string) (*googleTokenInfo, error) {
+	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+	if err != nil {
+		return nil, fmt.Errorf("google tokeninfo request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("google tokeninfo returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var info googleTokenInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode tokeninfo: %w", err)
+	}
+
+	if s.googleClientID != "" && info.Aud != s.googleClientID {
+		return nil, fmt.Errorf("audience mismatch: got %s", info.Aud)
+	}
+
+	return &info, nil
+}
+
+func generateUsername(email, name string) string {
+	if name != "" {
+		username := strings.ToLower(strings.ReplaceAll(name, " ", ""))
+		username = strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+				return r
+			}
+			return -1
+		}, username)
+		if len(username) >= 3 {
+			if len(username) > 30 {
+				username = username[:30]
+			}
+			return username
+		}
+	}
+
+	parts := strings.SplitN(email, "@", 2)
+	username := strings.ToLower(parts[0])
+	username = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			return r
+		}
+		return -1
+	}, username)
+	if len(username) > 30 {
+		username = username[:30]
+	}
+	return username
 }
 
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (*users.AuthResponse, error) {

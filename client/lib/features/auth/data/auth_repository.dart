@@ -42,4 +42,11 @@ class AuthRepository {
   Future<void> logout() async {
     await _dio.post('/api/v1/auth/logout');
   }
+
+  Future<AuthResponse> googleSignIn(String idToken) async {
+    final response = await _dio.post('/api/v1/auth/google', data: {
+      'id_token': idToken,
+    });
+    return AuthResponse.fromJson(response.data);
+  }
 }
