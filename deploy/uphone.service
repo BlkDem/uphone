@@ -1,0 +1,26 @@
+[Unit]
+Description=UPhone Messenger Server
+After=network.target mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=uphone
+Group=uphone
+WorkingDirectory=/opt/uphone/server
+EnvironmentFile=/etc/uphone/uphone.env
+ExecStart=/opt/uphone/server/uphone-server
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/uphone/uploads
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

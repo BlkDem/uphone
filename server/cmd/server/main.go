@@ -48,7 +48,11 @@ func main() {
 	signalHub := webrtc.NewSignalHub()
 	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub)
 	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub)
-	uploadHandler := chat.NewUploadHandler(absUploadDir, fmt.Sprintf("http://192.168.1.18:%d", cfg.ServerPort))
+	uploadBaseURL := cfg.UploadBaseURL
+	if uploadBaseURL == "" {
+		uploadBaseURL = fmt.Sprintf("http://localhost:%d", cfg.ServerPort)
+	}
+	uploadHandler := chat.NewUploadHandler(absUploadDir, uploadBaseURL)
 
 	contactsRepo := contacts.NewRepository(db)
 	contactsHandler := contacts.NewHandler(contactsRepo)

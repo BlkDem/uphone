@@ -10,6 +10,7 @@ type Config struct {
 	DB             DBConfig
 	JWTSecret      string
 	UploadDir      string
+	UploadBaseURL  string
 	GoogleClientID string
 }
 
@@ -33,6 +34,7 @@ func Load() *Config {
 		},
 		JWTSecret:      getEnv("JWT_SECRET", "change-me-in-production"),
 		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
+		UploadBaseURL:  getEnv("UPLOAD_BASE_URL", ""),
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 	}
 }
