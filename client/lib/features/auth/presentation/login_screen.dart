@@ -200,15 +200,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showAddServer(BuildContext context) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _AddEditServerSheet(
-        onSave: (server) async {
-          await ServerConfig.instance.add(server);
-          setState(() => _selectedServerId = server.id);
-          ref.invalidate(apiClientProvider);
-        },
+      builder: (ctx) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: _AddEditServerSheet(
+            onSave: (server) async {
+              await ServerConfig.instance.add(server);
+              setState(() => _selectedServerId = server.id);
+              ref.invalidate(apiClientProvider);
+            },
+          ),
+        ),
       ),
     );
   }
@@ -321,35 +325,43 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
 
   void _showAddServer(BuildContext context) {
     Navigator.pop(context);
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _AddEditServerSheet(
-        onSave: (server) async {
-          await ServerConfig.instance.add(server);
-          widget.onSelected(server.id);
-          widget.onChanged?.call();
-        },
+      builder: (ctx) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: _AddEditServerSheet(
+            onSave: (server) async {
+              await ServerConfig.instance.add(server);
+              widget.onSelected(server.id);
+              widget.onChanged?.call();
+            },
+          ),
+        ),
       ),
     );
   }
 
   void _showEditServer(BuildContext context, ServerEntry server) {
     Navigator.pop(context);
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _AddEditServerSheet(
-        server: server,
-        onSave: (updated) async {
-          await ServerConfig.instance.update(updated);
-          widget.onChanged?.call();
-        },
-        onDelete: () async {
-          await ServerConfig.instance.remove(server.id);
-          widget.onSelected(ServerConfig.instance.selected.id);
-          widget.onChanged?.call();
-        },
+      builder: (ctx) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: _AddEditServerSheet(
+            server: server,
+            onSave: (updated) async {
+              await ServerConfig.instance.update(updated);
+              widget.onChanged?.call();
+            },
+            onDelete: () async {
+              await ServerConfig.instance.remove(server.id);
+              widget.onSelected(ServerConfig.instance.selected.id);
+              widget.onChanged?.call();
+            },
+          ),
+        ),
       ),
     );
   }
