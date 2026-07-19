@@ -18,7 +18,7 @@ Widget buildVideoPlayerImpl(String url, {double height = 200}) {
       video.src = url;
       video.setAttribute('controls', '');
       video.setAttribute('style',
-          'max-width:100%;max-height:${height}px;display:block;');
+          'max-width:100%;max-height:${height}px;display:block;object-fit:contain;');
       video.setAttribute('playsinline', '');
       wrapper.appendChild(video);
       return wrapper;
