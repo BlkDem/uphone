@@ -1,0 +1,85 @@
+2026/07/19 09:05:24 UPhone server starting on :8080
+2026/07/19 09:05:24 "GET http://192.168.1.18:8080/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E5NmE1N2EtYzdhMS00Y2QxLWFhY2QtYWI3NDMxNzBhNTgzIiwiaXNzIjoidXBob25lIiwiZXhwIjoxNzg0NDI3NDMyLCJpYXQiOjE3ODQ0MjY1MzJ9.u1Ef7Ny4hujAzuYYyeqkXAM1sOP3q1x2rtEiuNTb0B0 HTTP/1.1" from 192.168.1.18:60205 - 000 0B in 540.8µs
+2026/07/19 09:05:27 "POST http://127.0.0.1:8080/api/v1/auth/login HTTP/1.1" from 127.0.0.1:60209 - 200 729B in 105.0587ms
+2026/07/19 09:05:27 "POST http://127.0.0.1:8080/api/v1/upload HTTP/1.1" from 127.0.0.1:60210 - 200 146B in 1.594ms
+2026/07/19 09:05:27 "GET http://127.0.0.1:8080/uploads/7a96a57a_1784426727600_b91feadf0c60b359.yaml HTTP/1.1" from 127.0.0.1:60211 - 200 730B in 76.016ms
+2026/07/19 09:07:37 "OPTIONS http://192.168.1.18:8080/api/v1/auth/login HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:07:37 "POST http://192.168.1.18:8080/api/v1/auth/login HTTP/1.1" from 192.168.1.18:50979 - 200 729B in 105.4594ms
+2026/07/19 09:07:37 "OPTIONS http://192.168.1.18:8080/api/v1/auth/refresh HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:07:37 "POST http://192.168.1.18:8080/api/v1/auth/refresh HTTP/1.1" from 192.168.1.18:50979 - 200 729B in 5.9471ms
+2026/07/19 09:07:37 "OPTIONS http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:07:37 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 197B in 7.6024ms
+2026/07/19 09:07:37 "GET http://192.168.1.18:8080/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E5NmE1N2EtYzdhMS00Y2QxLWFhY2QtYWI3NDMxNzBhNTgzIiwiaXNzIjoidXBob25lIiwiZXhwIjoxNzg0NDI3NzU3LCJpYXQiOjE3ODQ0MjY4NTd9.xvejZfECoT4ZnUIpu5OeW1kEsCWbW0-BXBqNSd-y4mM HTTP/1.1" from 192.168.1.18:58923 - 000 0B in 0s
+2026/07/19 09:07:40 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:07:40 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51661 - 204 0B in 0s
+2026/07/19 09:07:40 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51661 - 200 5578B in 9.5982ms
+2026/07/19 09:07:40 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 200 5578B in 5.9543ms
+2026/07/19 09:07:41 "GET http://192.168.1.18:8080/uploads/7a96a57a_1784426544113_f52d0bce7abb6730.jpg HTTP/1.1" from 192.168.1.18:50979 - 200 5523602B in 48.8773ms
+2026/07/19 09:07:52 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:07:52 "POST http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages HTTP/1.1" from 192.168.1.18:50979 - 201 417B in 22.4032ms
+2026/07/19 09:08:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:08:08 "OPTIONS http://192.168.1.18:8080/api/v1/upload HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:08 "POST http://192.168.1.18:8080/api/v1/upload HTTP/1.1" from 192.168.1.18:50979 - 200 124B in 13.3367ms
+2026/07/19 09:08:08 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:08 "POST http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages HTTP/1.1" from 192.168.1.18:50979 - 201 504B in 17.8037ms
+2026/07/19 09:08:08 "GET http://192.168.1.18:8080/uploads/7a96a57a_1784426888388_1c46af3c15d1b661.jpg HTTP/1.1" from 192.168.1.18:50979 - 200 4169886B in 99.5706ms
+2026/07/19 09:08:15 "OPTIONS http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:15 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 197B in 4.7894ms
+2026/07/19 09:08:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:08:42 "OPTIONS http://192.168.1.18:8080/api/v1/users/search?q=sv HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:42 "GET http://192.168.1.18:8080/api/v1/users/search?q=sv HTTP/1.1" from 192.168.1.18:50979 - 200 265B in 4.0355ms
+2026/07/19 09:08:43 "OPTIONS http://192.168.1.18:8080/api/v1/users/search?q=sve HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:43 "GET http://192.168.1.18:8080/api/v1/users/search?q=sve HTTP/1.1" from 192.168.1.18:50979 - 200 265B in 3.9464ms
+2026/07/19 09:08:48 "OPTIONS http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:48 "POST http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 201 386B in 26.7283ms
+2026/07/19 09:08:49 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 409B in 5.6926ms
+2026/07/19 09:08:52 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:08:52 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 204 0B in 0s
+2026/07/19 09:08:52 "GET http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 200 3B in 7.2968ms
+2026/07/19 09:08:52 "GET http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 200 3B in 6.1643ms
+2026/07/19 09:08:55 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=typing.start
+2026/07/19 09:09:01 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=typing.stop
+2026/07/19 09:09:02 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 998.2µs
+2026/07/19 09:09:02 "POST http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages HTTP/1.1" from 192.168.1.18:50979 - 201 424B in 26.3715ms
+2026/07/19 09:09:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:09:12 "OPTIONS http://192.168.1.18:8080/api/v1/upload HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:12 "POST http://192.168.1.18:8080/api/v1/upload HTTP/1.1" from 192.168.1.18:50979 - 200 124B in 16.7446ms
+2026/07/19 09:09:12 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:12 "POST http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages HTTP/1.1" from 192.168.1.18:50979 - 201 504B in 17.7795ms
+2026/07/19 09:09:12 "GET http://192.168.1.18:8080/uploads/7a96a57a_1784426952184_a9ec416e9b8e3d2f.jpg HTTP/1.1" from 192.168.1.18:50979 - 200 5337728B in 29.9243ms
+2026/07/19 09:09:18 "OPTIONS http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:18 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 411B in 4.1119ms
+2026/07/19 09:09:20 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:20 "OPTIONS http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 204 0B in 0s
+2026/07/19 09:09:20 "GET http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 200 914B in 5.792ms
+2026/07/19 09:09:20 "GET http://192.168.1.18:8080/api/v1/chats/2749f5f8-f99a-4604-9bfe-f31e3f740ee9/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 200 914B in 5.4814ms
+2026/07/19 09:09:21 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 411B in 3.7335ms
+2026/07/19 09:09:23 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:23 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 204 0B in 0s
+2026/07/19 09:09:23 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 200 6483B in 6.7813ms
+2026/07/19 09:09:23 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 200 6483B in 6.0836ms
+2026/07/19 09:09:23 "GET http://192.168.1.18:8080/uploads/7a96a57a_1784426544113_f52d0bce7abb6730.jpg HTTP/1.1" from 192.168.1.18:50979 - 304 0B in 510.9µs
+2026/07/19 09:09:33 "OPTIONS http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:33 "GET http://192.168.1.18:8080/api/v1/chats HTTP/1.1" from 192.168.1.18:50979 - 200 411B in 4.5116ms
+2026/07/19 09:09:36 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 204 0B in 0s
+2026/07/19 09:09:36 "OPTIONS http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 204 0B in 0s
+2026/07/19 09:09:36 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:51110 - 200 6483B in 6.7736ms
+2026/07/19 09:09:36 "GET http://192.168.1.18:8080/api/v1/chats/bd0c80e9-ebc1-4315-afcf-8910b4adf767/messages?limit=50&offset=0 HTTP/1.1" from 192.168.1.18:50979 - 200 6483B in 5.5114ms
+2026/07/19 09:09:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:10:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:10:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:11:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:11:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:12:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:12:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:13:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:13:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:14:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:14:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:15:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:15:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:16:07 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:16:37 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:17:10 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:18:10 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping
+2026/07/19 09:19:10 WS message: userID=7a96a57a-c7a1-4cd1-aacd-ab743170a583 type=ping

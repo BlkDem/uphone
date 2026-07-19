@@ -12,6 +12,7 @@ func Migrate(db *sql.DB) error {
 		"migrations/001_init.sql",
 		"migrations/002_google_oauth.sql",
 		"migrations/003_contacts.sql",
+		"migrations/004_admin.sql",
 	}
 
 	for _, migrationPath := range migrations {

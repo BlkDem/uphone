@@ -39,9 +39,17 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'logout') {
-                ref.read(authProvider.notifier).logout();
-                context.go('/login');
+              switch (value) {
+                case 'admin':
+                  context.go('/admin');
+                  break;
+                case 'change_password':
+                  context.go('/change-password');
+                  break;
+                case 'logout':
+                  ref.read(authProvider.notifier).logout();
+                  context.go('/login');
+                  break;
               }
             },
             itemBuilder: (context) => [
@@ -55,6 +63,22 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                   ),
                   title: Text(authState.user?.displayName ?? ''),
                   subtitle: Text(authState.user?.email ?? ''),
+                ),
+              ),
+              const PopupMenuDivider(),
+              if (authState.user?.isAdmin == true)
+                const PopupMenuItem(
+                  value: 'admin',
+                  child: ListTile(
+                    leading: Icon(Icons.admin_panel_settings),
+                    title: Text('Admin Panel'),
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'change_password',
+                child: ListTile(
+                  leading: Icon(Icons.lock_reset),
+                  title: Text('Change Password'),
                 ),
               ),
               const PopupMenuDivider(),

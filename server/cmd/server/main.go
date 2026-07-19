@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/uphone/server/internal/admin"
 	"github.com/uphone/server/internal/auth"
 	"github.com/uphone/server/internal/chat"
 	"github.com/uphone/server/internal/contacts"
@@ -41,6 +43,12 @@ func main() {
 	userRepo := users.NewRepository(db)
 	authService := auth.NewService(userRepo, cfg.JWTSecret, cfg.GoogleClientID)
 	authHandler := auth.NewHandler(authService)
+
+	if err := authService.SeedAdmin(context.Background()); err != nil {
+		log.Printf("warning: failed to seed admin user: %v", err)
+	}
+
+	adminHandler := admin.NewHandler(userRepo)
 
 	chatRepo := chat.NewRepository(db)
 	chatHub := chat.NewHub()
@@ -87,6 +95,13 @@ func main() {
 			api.HandleFunc("PUT /users/me", authHandler.UpdateMe)
 			api.HandleFunc("GET /users/search", authHandler.SearchUsers)
 			api.HandleFunc("GET /users/{id}", authHandler.GetUser)
+			api.HandleFunc("POST /auth/change-password", authHandler.ChangePassword)
+
+			api.HandleFunc("GET /admin/users", adminHandler.ListUsers)
+			api.HandleFunc("POST /admin/users", adminHandler.CreateUser)
+			api.HandleFunc("DELETE /admin/users/{id}", adminHandler.DeleteUser)
+			api.HandleFunc("PUT /admin/users/{id}/role", adminHandler.ChangeUserRole)
+			api.HandleFunc("POST /admin/users/{id}/password", adminHandler.ChangeUserPassword)
 
 			api.HandleFunc("POST /chats", chatAPI.CreateChat)
 			api.HandleFunc("GET /chats", chatAPI.GetChats)

@@ -4,6 +4,7 @@ class User {
   final String email;
   final String displayName;
   final String avatarUrl;
+  final String role;
   final String status;
 
   const User({
@@ -12,8 +13,11 @@ class User {
     required this.email,
     required this.displayName,
     this.avatarUrl = '',
+    this.role = 'user',
     this.status = 'offline',
   });
+
+  bool get isAdmin => role == 'admin';
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -22,6 +26,7 @@ class User {
       email: json['email'] ?? '',
       displayName: json['display_name'] ?? json['username'] ?? '',
       avatarUrl: json['avatar_url'] ?? '',
+      role: json['role'] ?? 'user',
       status: json['status'] ?? 'offline',
     );
   }
@@ -29,6 +34,7 @@ class User {
   User copyWith({
     String? displayName,
     String? avatarUrl,
+    String? role,
     String? status,
   }) {
     return User(
@@ -37,6 +43,7 @@ class User {
       email: email,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      role: role ?? this.role,
       status: status ?? this.status,
     );
   }

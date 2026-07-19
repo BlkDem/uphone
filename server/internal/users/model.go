@@ -10,6 +10,7 @@ type User struct {
 	GoogleID     *string    `json:"-"`
 	DisplayName  string     `json:"display_name"`
 	AvatarURL    string     `json:"avatar_url,omitempty"`
+	Role         string     `json:"role"`
 	Status       string     `json:"status"`
 	LastSeen     time.Time  `json:"last_seen"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -41,4 +42,25 @@ type AuthResponse struct {
 
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
+}
+
+type AdminCreateUserRequest struct {
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+}
+
+type AdminChangePasswordRequest struct {
+	Password string `json:"password"`
+}
+
+type AdminChangeRoleRequest struct {
+	Role string `json:"role"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
 }

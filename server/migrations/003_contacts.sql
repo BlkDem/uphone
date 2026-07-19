@@ -13,5 +13,5 @@ CREATE TABLE IF NOT EXISTS contacts (
     FOREIGN KEY (contact_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX idx_contacts_owner ON contacts(owner_id);
-CREATE INDEX idx_contacts_owner_name ON contacts(owner_id, display_name);
+CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts(owner_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_owner_name ON contacts(owner_id, display_name);

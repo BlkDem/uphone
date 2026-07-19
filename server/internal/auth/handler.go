@@ -208,6 +208,41 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	shared.WriteJSON(w, http.StatusOK, user)
 }
 
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	if userID == "" {
+		shared.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req users.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		shared.WriteError(w, http.StatusBadRequest, "old_password and new_password are required")
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		shared.WriteError(w, http.StatusBadRequest, "new password must be at least 6 characters")
+		return
+	}
+
+	if err := h.service.ChangePassword(r.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+		if errors.Is(err, ErrInvalidCredentials) {
+			shared.WriteError(w, http.StatusUnauthorized, "incorrect current password")
+			return
+		}
+		shared.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "password changed"})
+}
+
 func (h *Handler) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDToken string `json:"id_token"`

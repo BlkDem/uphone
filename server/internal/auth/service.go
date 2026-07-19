@@ -225,6 +225,52 @@ func (s *Service) GetUser(ctx context.Context, userID string) (*users.User, erro
 	return s.userRepo.GetByID(ctx, userID)
 }
 
+func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return ErrInvalidCredentials
+	}
+
+	if user.PasswordHash == nil {
+		return ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(oldPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	return s.userRepo.UpdatePassword(ctx, userID, string(hash))
+}
+
+func (s *Service) SeedAdmin(ctx context.Context) error {
+	existing, _ := s.userRepo.GetByEmail(ctx, "blkdem@blkdem.ru")
+	if existing != nil {
+		return nil
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("12345678"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	hashStr := string(hash)
+	admin := &users.User{
+		Username:     "blkdem",
+		Email:        "blkdem@blkdem.ru",
+		PasswordHash: &hashStr,
+		DisplayName:  "Admin",
+		Role:         "admin",
+		Status:       "offline",
+	}
+
+	return s.userRepo.Create(ctx, admin)
+}
+
 func (s *Service) ValidateToken(tokenString string) (string, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
