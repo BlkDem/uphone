@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/shared/models/chat.dart';
@@ -65,6 +67,41 @@ class ChatRepository {
     final response = await _dio.get('/api/v1/chats/$chatId/members');
     final data = response.data as List;
     return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, String>> uploadFile(String filename, String mimeType, Uint8List bytes) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    final response = await _dio.post('/api/v1/upload', data: formData);
+    final data = response.data;
+    return {'url': data['url'] as String, 'filename': data['filename'] as String};
+  }
+
+  Future<ChatMessage> sendMessageWithFile(
+    String chatId, {
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    final uploadResult = await uploadFile(filename, mimeType, bytes);
+    final type = mimeType.startsWith('image/')
+        ? 'image'
+        : mimeType.startsWith('video/')
+            ? 'video'
+            : mimeType.startsWith('audio/')
+                ? 'voice'
+                : 'file';
+    final response = await _dio.post('/api/v1/chats/$chatId/messages', data: {
+      'content': '',
+      'type': type,
+      'file_url': uploadResult['url'],
+    });
+    return ChatMessage.fromJson(response.data);
   }
 }
 
@@ -214,25 +251,38 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> sendMessage(String chatId, String content) async {
     try {
       final msg = await _repository.sendMessage(chatId, content: content);
-      final updatedChats = state.chats.map((chat) {
-        if (chat.id == chatId) {
-          return Chat(
-            id: chat.id,
-            type: chat.type,
-            name: chat.name,
-            description: chat.description,
-            avatarUrl: chat.avatarUrl,
-            createdBy: chat.createdBy,
-            createdAt: chat.createdAt,
-            updatedAt: DateTime.now(),
-            lastMessage: msg,
-          );
-        }
-        return chat;
-      }).toList();
-      updatedChats.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      state = state.copyWith(chats: updatedChats);
+      _onMessageSent(chatId, msg);
     } catch (_) {}
+  }
+
+  Future<void> sendFile(String chatId, String filename, String mimeType, Uint8List bytes) async {
+    try {
+      final msg = await _repository.sendMessageWithFile(chatId, filename: filename, mimeType: mimeType, bytes: bytes);
+      _onMessageSent(chatId, msg);
+    } catch (e) {
+      debugPrint('sendFile error: $e');
+    }
+  }
+
+  void _onMessageSent(String chatId, ChatMessage msg) {
+    final updatedChats = state.chats.map((chat) {
+      if (chat.id == chatId) {
+        return Chat(
+          id: chat.id,
+          type: chat.type,
+          name: chat.name,
+          description: chat.description,
+          avatarUrl: chat.avatarUrl,
+          createdBy: chat.createdBy,
+          createdAt: chat.createdAt,
+          updatedAt: DateTime.now(),
+          lastMessage: msg,
+        );
+      }
+      return chat;
+    }).toList();
+    updatedChats.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    state = state.copyWith(chats: updatedChats);
   }
 
   void sendTypingStart(String chatId) {

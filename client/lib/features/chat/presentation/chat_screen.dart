@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -134,6 +135,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           MessageInput(
             onSend: (content) => _sendMessage(content),
+            onSendFile: (filename, mimeType, bytes) =>
+                _sendFile(filename, mimeType, bytes),
             onTypingStart: () =>
                 ref.read(chatProvider.notifier).sendTypingStart(widget.chatId),
             onTypingStop: () =>
@@ -155,6 +158,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } else {
       ref.read(chatProvider.notifier).sendMessage(widget.chatId, content);
     }
+  }
+
+  void _sendFile(String filename, String mimeType, Uint8List bytes) {
+    ref.read(chatProvider.notifier).sendFile(widget.chatId, filename, mimeType, bytes);
   }
 
   void _startEdit(String msgId) {
