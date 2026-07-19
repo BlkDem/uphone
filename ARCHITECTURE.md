@@ -8,14 +8,22 @@
 
 ## Правила ветвления
 
-- Каждая фича — отдельная ветка `feature/<name>`
+- Каждая фича — отдельная ветка `feature/<name>` или `fix/<name>`
 - Каждая фича покрывается тестами
-- Мерж в `main` только через PR с зелёными тестами
-- Основные ветки: `main`, `develop`
+- Мерж в `master` через `--no-ff`
+- Прямые коммиты в `master` запрещены
 
 ## Архитектура
 
 ```
+┌─────────────────────────────────────────┐
+│              Apache2                    │
+│    (reverse proxy + static files)       │
+├──────────┬──────────────────────────────┤
+│ /api/*   │  /ws  │  /* (static)         │
+└────┬─────┴───┬───┴───────┬─────────────┘
+     │         │           │
+     ▼         ▼           ▼
 ┌─────────────────────────────────────────┐
 │              UPhone Server              │
 │              (Go, один бинарник)        │
@@ -36,36 +44,37 @@
 
 | Компонент | Решение | Обоснование |
 |-----------|---------|-------------|
-| HTTP | chi router | Лёгкий, stdlib-compatible |
+| HTTP | chi router v5 | Лёгкий, stdlib-compatible |
 | WebSocket | gorilla/websocket | Зрелая библиотека |
-| WebRTC | Pion | Зрелая Go-библиотека, P2P для 1:1 |
-| БД | MariaDB 11 | ACID, JSON, full-text search, MySQL-совместимость |
-| Файлы | Локальная FS | ~10 пользователей, einfach |
-| Авторизация | JWT (access + refresh) | Stateless, простота |
+| WebRTC | Сигналинг через WS | P2P для 1:1 |
+| БД | MariaDB 11 | ACID, JSON, full-text, MySQL-совместимость |
+| Файлы | Локальная FS | ~10 пользователей |
+| Авторизация | JWT (access + refresh) | Stateless |
 | Пароли | bcrypt | Стандарт безопасности |
+| Google OAuth | google_sign_in + server verification | SSO |
 
 ### Клиент: Flutter
 
 | Компонент | Решение | Обоснование |
 |-----------|---------|-------------|
-| Платформы | Windows, Linux, Android, Web | Один код |
+| Платформы | Web (приоритет), Android | Один код |
 | Архитектура | Riverpod + Freezed | Чистая архитектура |
 | UI | Material Design 3 | Современный дизайн |
 | WebRTC | flutter_webrtc | Зрелый пакет |
 | Сеть | dio + web_socket_channel | HTTP + WS |
-| Локальная БД | drift (SQLite) | Офлайн-кеш |
+| Роутинг | go_router | Declarative routing |
 
 ### Что НЕ используется
 
 | Компонент | Почему исключён |
 |-----------|-----------------|
-| Redis | In-memory кеш в Go, ~10 пользователей |
+| Redis | ~10 пользователей, in-memory в Go |
 | NATS | WebSocket hub напрямую |
 | MinIO | Локальная ФС |
 | Микросервисы | Один бинарник |
-| SFU | P2P для 1:1, mesh для групп |
+| SFU | P2P для 1:1 |
 | Rate Limiting | ~10 пользователей |
-| Nginx | Go слушает напрямую (development) |
+| Docker (прод) | Прямой деплой на Ubuntu/Debian |
 
 ## Структура проекта
 
@@ -74,59 +83,43 @@ uphone/
 ├── client/                          # Flutter клиент
 │   ├── lib/
 │   │   ├── core/                    # Ядро приложения
-│   │   │   ├── config/              # Конфигурация
-│   │   │   ├── di/                  # Dependency Injection
-│   │   │   ├── network/             # HTTP/WS клиенты
-│   │   │   ├── storage/             # Локальное хранилище
-│   │   │   └── theme/               # Темы (светлая/тёмная)
+│   │   │   ├── config/              # ServerConfig, AppConfig, RememberMe
+│   │   │   ├── network/             # ApiClient (Dio), WsClient
+│   │   │   ├── router/              # Go Router конфигурация
+│   │   │   ├── theme/               # Темы (светлая/тёмная)
+│   │   │   └── utils/               # Google Sign-In helpers
 │   │   ├── features/                # Модули по фичам
-│   │   │   ├── auth/                # Авторизация
-│   │   │   │   ├── data/
-│   │   │   │   ├── domain/
-│   │   │   │   └── presentation/
-│   │   │   ├── chat/                # Чаты
-│   │   │   ├── contacts/            # Контакты
-│   │   │   ├── calls/               # Звонки
-│   │   │   ├── profile/             # Профиль
-│   │   │   └── settings/            # Настройки
-│   │   ├── shared/                  # Общие виджеты
+│   │   │   ├── auth/                # Авторизация (JWT + Google OAuth)
+│   │   │   ├── chat/                # Чаты, сообщения, WebSocket
+│   │   │   ├── contacts/            # Контакты (CRUD, vCard/CSV)
+│   │   │   └── calls/               # WebRTC звонки
+│   │   ├── shared/                  # Модели (User, Chat, Contact)
 │   │   └── main.dart
-│   ├── pubspec.yaml
-│   └── analysis_options.yaml
+│   └── pubspec.yaml
 │
 ├── server/                          # Go сервер
-│   ├── cmd/
-│   │   └── server/
-│   │       └── main.go              # Точка входа
+│   ├── cmd/server/main.go           # Точка входа
 │   ├── internal/
-│   │   ├── config/                  # Конфигурация
-│   │   ├── auth/                    # Аутентификация (JWT, bcrypt)
-│   │   ├── chat/                    # Бизнес-логика чатов
-│   │   │   ├── handler.go           # HTTP handlers
-│   │   │   ├── service.go           # Бизнес-логика
-│   │   │   ├── repository.go        # Работа с БД
-│   │   │   └── ws_hub.go            # WebSocket хаб
+│   │   ├── config/                  # Конфигурация (env vars)
+│   │   ├── auth/                    # JWT, bcrypt, Google OAuth
+│   │   ├── chat/                    # Чаты, сообщения, WebSocket хаб
+│   │   ├── contacts/                # Контакты (CRUD, vCard, CSV)
 │   │   ├── users/                   # Пользователи
-│   │   ├── files/                   # Загрузка файлов
-│   │   ├── media/                   # WebRTC (P2P)
-│   │   └── infrastructure/
-│   │       ├── database/            # MariaDB
-│   │       └── storage/             # Локальная ФС
+│   │   ├── webrtc/                  # WebRTC сигналинг
+│   │   └── middleware/              # Auth, CORS
 │   ├── migrations/                  # SQL миграции
-│   │   └── 001_init.sql
-│   ├── go.mod
-│   └── go.sum
+│   │   ├── 001_init.sql
+│   │   ├── 002_google_oauth.sql
+│   │   └── 003_contacts.sql
+│   └── go.mod
 │
-├── docker/
-│   ├── Dockerfile.server
-│   └── docker-compose.yml           # PostgreSQL + сервер
+├── deploy/                          # Развёртывание
+│   ├── deploy.sh                    # Основной скрипт
+│   ├── uphone.env.example           # Шаблон конфига
+│   ├── uphone.service               # Systemd unit
+│   └── uphone.conf                  # Apache2 vhost
 │
-├── docs/
-│   ├── ARCHITECTURE.md              # Этот файл
-│   └── api.md                       # Описание API
-│
-├── .gitignore
-└── README.md
+└── ARCHITECTURE.md
 ```
 
 ## API Endpoints
@@ -135,6 +128,7 @@ uphone/
 ```
 POST   /api/v1/auth/register        # Регистрация
 POST   /api/v1/auth/login           # Вход (access + refresh токены)
+POST   /api/v1/auth/google          # Google OAuth (id_token)
 POST   /api/v1/auth/refresh         # Обновление access токена
 POST   /api/v1/auth/logout          # Выход
 ```
@@ -149,40 +143,47 @@ GET    /api/v1/users/:id            # Профиль пользователя
 
 ### Chats
 ```
-POST   /api/v1/chats                # Создать чат (личный/групповой/канал)
+POST   /api/v1/chats                # Создать чат (personal/group/channel)
 GET    /api/v1/chats                # Список чатов
 GET    /api/v1/chats/:id            # Информация о чате
-PUT    /api/v1/chats/:id            # Обновить чат (только owner/admin)
-DELETE /api/v1/chats/:id            # Удалить чат (только owner)
+PUT    /api/v1/chats/:id            # Обновить чат
+DELETE /api/v1/chats/:id            # Удалить чат
 ```
 
-### Members (группы/каналы)
+### Members
 ```
 GET    /api/v1/chats/:id/members              # Список участников
-POST   /api/v1/chats/:id/members              # Добавить участника (admin+)
-DELETE /api/v1/chats/:id/members/:memberId    # Удалить участника (admin+)
+POST   /api/v1/chats/:id/members              # Добавить участника
+DELETE /api/v1/chats/:id/members/:memberId    # Удалить участника
 POST   /api/v1/chats/:id/leave                # Покинуть чат
 ```
 
 ### Messages
 ```
-POST   /api/v1/chats/:id/messages           # Отправить сообщение
-GET    /api/v1/chats/:id/messages           # История (пагинация)
-PUT    /api/v1/chats/:id/messages/:msgId     # Редактировать
-DELETE /api/v1/chats/:id/messages/:msgId     # Удалить
-POST   /api/v1/chats/:id/messages/:msgId/react  # Реакция
-POST   /api/v1/chats/:id/messages/:msgId/pin    # Закрепить
+POST   /api/v1/chats/:id/messages              # Отправить сообщение
+GET    /api/v1/chats/:id/messages              # История (пагинация)
+PUT    /api/v1/chats/:id/messages/:msgId       # Редактировать
+DELETE /api/v1/chats/:id/messages/:msgId       # Удалить
+POST   /api/v1/chats/:id/messages/:msgId/react # Реакция
+POST   /api/v1/chats/:id/messages/:msgId/forward # Переслать
+GET    /api/v1/chats/:id/media                 # Медиа-файлы чата
 ```
 
-### Files
+### Contacts
 ```
-POST   /api/v1/files/upload          # Загрузить файл
-GET    /api/v1/files/:id             # Скачать файл
+GET    /api/v1/contacts?q=           # Список контактов (поиск)
+POST   /api/v1/contacts              # Создать контакт
+GET    /api/v1/contacts/:id          # Получить контакт
+PUT    /api/v1/contacts/:id          # Обновить контакт
+DELETE /api/v1/contacts/:id          # Удалить контакт
+GET    /api/v1/contacts/export       # Экспорт (vcard|csv)
+POST   /api/v1/contacts/import       # Импорт (vcard|csv)
 ```
 
-### WebSocket
+### Upload / WebSocket
 ```
-WS     /ws?token=                    # Real-time соединение
+POST   /api/v1/upload               # Загрузить файл
+WS     /ws?token=                   # Real-time соединение
 ```
 
 ## WebSocket Протокол
@@ -192,108 +193,44 @@ WS     /ws?token=                    # Real-time соединение
 {"type": "message.send", "chatId": "123", "content": "Hello", "replyTo": null}
 {"type": "typing.start", "chatId": "123"}
 {"type": "typing.stop", "chatId": "123"}
-{"type": "message.read", "chatId": "123", "msgId": "456"}
-{"type": "presence.update", "status": "online"}
+{"type": "call-request", "call_id": "...", "to_user": "...", "payload": {"call_type": "video"}}
+{"type": "call-accept", "call_id": "..."}
+{"type": "call-reject", "call_id": "..."}
 ```
 
 ### Сервер → Клиент
 ```json
-{"type": "message.new", "chatId": "123", "msg": {...}}
-{"type": "message.updated", "chatId": "123", "msg": {...}}
-{"type": "message.deleted", "chatId": "123", "msgId": "456"}
-{"type": "typing.start", "chatId": "123", "userId": "789"}
-{"type": "user.online", "userId": "789"}
-{"type": "user.offline", "userId": "789"}
-{"type": "message.reaction", "chatId": "123", "msgId": "456", "emoji": "👍", "userId": "789"}
+{"type": "message.new", "payload": {...}}
+{"type": "typing.start", "payload": {"userId": "...", "chatId": "..."}}
+{"type": "typing.stop", "payload": {"userId": "...", "chatId": "..."}}
+{"type": "call-request", "payload": {...}}
+{"type": "call-accept", "payload": {...}}
+{"type": "candidate", "payload": {...}}
+{"type": "offer", "payload": {...}}
+{"type": "answer", "payload": {...}}
 ```
 
 ## Database Schema (MariaDB)
 
-```sql
--- Пользователи
-CREATE TABLE users (
-    id CHAR(36) PRIMARY KEY,
-    username VARCHAR(30) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    display_name VARCHAR(100),
-    avatar_url TEXT,
-    status VARCHAR(20) DEFAULT 'offline',
-    last_seen DATETIME(3),
-    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+Таблицы: `users`, `chats`, `chat_members`, `messages`, `reactions`, `contacts`
 
--- Чаты
-CREATE TABLE chats (
-    id CHAR(36) PRIMARY KEY,
-    type VARCHAR(20) NOT NULL, -- 'personal', 'group', 'channel'
-    name VARCHAR(100),
-    description TEXT,
-    avatar_url TEXT,
-    created_by CHAR(36),
-    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+Миграции: `server/migrations/001_init.sql`, `002_google_oauth.sql`, `003_contacts.sql`
 
--- Участники чатов
-CREATE TABLE chat_members (
-    chat_id CHAR(36) NOT NULL,
-    user_id CHAR(36) NOT NULL,
-    role VARCHAR(20) DEFAULT 'member', -- 'owner', 'admin', 'member'
-    joined_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (chat_id, user_id),
-    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Сообщения
-CREATE TABLE messages (
-    id CHAR(36) PRIMARY KEY,
-    chat_id CHAR(36) NOT NULL,
-    sender_id CHAR(36),
-    content TEXT,
-    type VARCHAR(20) DEFAULT 'text', -- 'text', 'image', 'video', 'file', 'voice'
-    file_url TEXT,
-    reply_to CHAR(36),
-    is_pinned BOOLEAN DEFAULT FALSE,
-    is_deleted BOOLEAN DEFAULT FALSE,
-    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
-    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL,
-    FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Реакции
-CREATE TABLE reactions (
-    message_id CHAR(36) NOT NULL,
-    user_id CHAR(36) NOT NULL,
-    emoji VARCHAR(10) NOT NULL,
-    created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (message_id, user_id, emoji),
-    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Индексы
-CREATE INDEX idx_messages_chat_id ON messages(chat_id, created_at DESC);
-CREATE INDEX idx_messages_sender_id ON messages(sender_id);
-CREATE INDEX idx_chat_members_user_id ON chat_members(user_id);
-```
+Схема применяется автоматически при старте сервера (idempotent, `IF NOT EXISTS`).
 
 ## Этапы разработки
 
-| # | Этап | Описание | Результат |
-|---|------|----------|-----------|
-| 1 | **Инфраструктура** | Docker Compose, PostgreSQL, Go проект | Рабочая среда |
-| 2 | **Auth** | Регистрация, вход, JWT, профиль | Авторизация |
-| 3 | **Chat Core** | Личные сообщения, WebSocket, история | Текстовый чат |
-| 4 | **Группы и Каналы** | Групповые чаты, каналы, участники | Групповое общение |
-| 5 | **Файлы** | Загрузка изображений, видео, документов | Медиа-контент |
-| 6 | **UI Клиент** | Flutter: авторизация, чаты, контакты | Рабочий клиент |
-| 7 | **Голосовые сообщения** | Запись и воспроизведение аудио | Голосовые сообщения |
-| 8 | **Реакции и Уведомления** | Emoji реакции, уведомления | Интерактивность |
-| 9 | **WebRTC Звонки** | Личные и групповые звонки | Аудио/видео связь |
-| 10 | **Поиск и Настройки** | Поиск по истории, настройки | Полный функционал |
+| # | Этап | Статус |
+|---|------|--------|
+| 1 | Инфраструктура (MariaDB, Go проект) | Готово |
+| 2 | Auth (JWT, bcrypt, Google OAuth) | Готово |
+| 3 | Chat Core (личные сообщения, WebSocket, история) | Готово |
+| 4 | Группы и каналы (участники, roles) | Готово |
+| 5 | Файлы (загрузка, изображения, видео, документы) | Готово |
+| 6 | Flutter Web клиент | Готово |
+| 7 | Голосовые сообщения | Готово |
+| 8 | Реакции (emoji) | Готово |
+| 9 | WebRTC звонки (аудио/видео) | Готово |
+| 10 | Контакты (CRUD, vCard/CSV импорт/экспорт) | Готово |
+| 11 | Remember Me (сохранение логина) | Готово |
+| 12 | Боевое развёртывание (deploy script) | Готово |
