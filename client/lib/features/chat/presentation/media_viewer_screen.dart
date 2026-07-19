@@ -1,14 +1,13 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:dio/dio.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:uphone_client/shared/models/chat.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uphone_client/shared/models/chat.dart';
 import 'package:uphone_client/core/utils/web_sharing.dart' as web_sharing;
+import 'package:uphone_client/core/utils/download_helper.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   final List<ChatMessage> messages;
@@ -129,26 +128,11 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
 
     setState(() => _isDownloading = true);
     try {
-      if (kIsWeb) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
-      } else {
-        final dio = Dio();
-        final response = await dio.get<List<int>>(
-          url,
-          options: Options(responseType: ResponseType.bytes),
+      await DownloadHelper.downloadFile(url);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image saved')),
         );
-        final bytes = response.data;
-        if (bytes == null) throw Exception('Empty response');
-
-        final filename = url.split('/').last;
-        final dir = Directory.systemTemp;
-        final file = File('${dir.path}/$filename');
-        await file.writeAsBytes(bytes);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Saved to ${file.path}')),
-          );
-        }
       }
     } catch (e) {
       if (mounted) {
