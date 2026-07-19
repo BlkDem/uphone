@@ -253,11 +253,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
           actions: [
-            OutlinedButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
+            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
               onPressed: () {
                 final name = nameCtrl.text.trim();
                 final host = hostCtrl.text.trim();
@@ -418,6 +419,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
           actions: [
             OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
               onPressed: () {
                 final name = nameCtrl.text.trim();
                 final host = hostCtrl.text.trim();
@@ -466,6 +468,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
           actions: [
             OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
               onPressed: () {
                 final name = nameCtrl.text.trim();
                 final host = hostCtrl.text.trim();
