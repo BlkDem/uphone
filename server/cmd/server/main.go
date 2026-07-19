@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/uphone/server/internal/infrastructure/database"
 	"github.com/uphone/server/internal/middleware"
 	"github.com/uphone/server/internal/users"
+	"github.com/uphone/server/internal/webrtc"
 )
 
 func main() {
@@ -33,6 +35,7 @@ func main() {
 	}
 
 	os.MkdirAll(cfg.UploadDir, 0755)
+	absUploadDir, _ := filepath.Abs(cfg.UploadDir)
 
 	userRepo := users.NewRepository(db)
 	authService := auth.NewService(userRepo, cfg.JWTSecret)
@@ -41,8 +44,10 @@ func main() {
 	chatRepo := chat.NewRepository(db)
 	chatHub := chat.NewHub()
 	go chatHub.Run()
-	chatAPI := chat.NewAPIHandler(chatRepo, userRepo)
-	chatWS := chat.NewHandler(chatRepo, chatHub)
+	signalHub := webrtc.NewSignalHub()
+	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub)
+	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub)
+	uploadHandler := chat.NewUploadHandler(absUploadDir, fmt.Sprintf("http://192.168.1.18:%d", cfg.ServerPort))
 
 	tokenValidator := func(tokenString string) (string, error) {
 		return authService.ValidateToken(tokenString)
@@ -54,7 +59,7 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	r.Use(chimw.Timeout(30 * time.Second))
+	r.Use(middleware.CORSMiddleware)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -86,10 +91,22 @@ func main() {
 			api.HandleFunc("PUT /chats/{id}", chatAPI.UpdateChat)
 			api.HandleFunc("DELETE /chats/{id}", chatAPI.DeleteChat)
 			api.HandleFunc("GET /chats/{id}/members", chatAPI.GetMembers)
+
+			api.Post("/upload", uploadHandler.Upload)
+
 			api.HandleFunc("POST /chats/{id}/members", chatAPI.AddMember)
 			api.HandleFunc("DELETE /chats/{id}/members/{memberId}", chatAPI.RemoveMember)
 			api.HandleFunc("POST /chats/{id}/leave", chatAPI.LeaveChat)
 		})
+	})
+
+	r.Get("/uploads/*", func(w http.ResponseWriter, r *http.Request) {
+		filePath := filepath.Join(absUploadDir, filepath.Base(r.URL.Path))
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, filePath)
 	})
 
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

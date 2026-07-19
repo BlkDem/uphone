@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:uphone_client/shared/models/chat.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -133,6 +134,41 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildFilePreview(BuildContext context) {
+    if (message.type == 'image') {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CachedNetworkImage(
+          imageUrl: message.fileUrl,
+          width: 220,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            width: 220,
+            height: 160,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+          errorWidget: (context, url, error) => Container(
+            width: 220,
+            height: 120,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
+                const SizedBox(height: 4),
+                Text(
+                  'Failed to load',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
