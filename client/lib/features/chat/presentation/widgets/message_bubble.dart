@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
@@ -140,75 +141,114 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildFilePreview(BuildContext context) {
     if (message.type == 'image') {
-      return GestureDetector(
-        onTap: onTapImage,
-        child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          imageUrl: message.fileUrl,
-          width: 220,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => Container(
-            width: 220,
-            height: 160,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
-          errorWidget: (context, url, error) => Container(
-            width: 220,
-            height: 120,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
-                const SizedBox(height: 4),
-                Text(
-                  'Failed to load',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: onTapImage,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CachedNetworkImage(
+                imageUrl: message.fileUrl,
+                width: 220,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 220,
+                  height: 160,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
-              ],
+                errorWidget: (context, url, error) => Container(
+                  width: 220,
+                  height: 120,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Failed to load',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _actionButton(
+                context,
+                icon: Icons.download,
+                tooltip: 'Save',
+                onPressed: () => _downloadFile(context),
+              ),
+              const SizedBox(width: 4),
+              _actionButton(
+                context,
+                icon: Icons.share,
+                tooltip: 'Share',
+                onPressed: () => _shareFile(context),
+              ),
+            ],
+          ),
+        ],
       );
     }
 
-    return GestureDetector(
-      onTap: () => _downloadFile(context),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _getFileIcon(),
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                message.fileUrl.split('/').last,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _getFileIcon(),
+                size: 20,
+                color: Theme.of(context).colorScheme.primary,
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.download,
-              size: 16,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  message.fileUrl.split('/').last,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _actionButton(
+                context,
+                icon: Icons.download,
+                tooltip: 'Save',
+                onPressed: () => _downloadFile(context),
+              ),
+              const SizedBox(width: 4),
+              _actionButton(
+                context,
+                icon: Icons.share,
+                tooltip: 'Share',
+                onPressed: () => _shareFile(context),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -241,6 +281,38 @@ class MessageBubble extends StatelessWidget {
         );
       }
     }
+  }
+
+  Future<void> _shareFile(BuildContext context) async {
+    try {
+      await Share.shareUri(Uri.parse(message.fileUrl));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Share failed: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _actionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: IconButton(
+        icon: Icon(icon, size: 16),
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
   }
 
   void _showContextMenu(BuildContext context) {
