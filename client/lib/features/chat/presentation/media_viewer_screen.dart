@@ -5,9 +5,10 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uphone_client/shared/models/chat.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uphone_client/core/utils/web_sharing.dart' as web_sharing;
 
 class MediaViewerScreen extends StatefulWidget {
   final List<ChatMessage> messages;
@@ -94,17 +95,19 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
 
     setState(() => _isDownloading = true);
     try {
-      final dio = Dio();
-      final response = await dio.get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
-      final bytes = response.data;
-      if (bytes == null) throw Exception('Empty response');
-
       if (kIsWeb) {
-        // On web, trigger download via anchor (simplified — use share as fallback)
-        await Share.shareXFiles([XFile.fromData(Uint8List.fromList(bytes), name: 'image.jpg', mimeType: 'image/jpeg')]);
+        await launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
       } else {
-        final dir = await getApplicationDocumentsDirectory();
+        final dio = Dio();
+        final response = await dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        final bytes = response.data;
+        if (bytes == null) throw Exception('Empty response');
+
         final filename = url.split('/').last;
+        final dir = Directory.systemTemp;
         final file = File('${dir.path}/$filename');
         await file.writeAsBytes(bytes);
         if (mounted) {
@@ -129,18 +132,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     if (url.isEmpty) return;
 
     try {
-      final dio = Dio();
-      final response = await dio.get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
-      final bytes = response.data;
-      if (bytes == null) throw Exception('Empty response');
-
-      final filename = url.split('/').last;
-      final xfile = XFile.fromData(
-        Uint8List.fromList(bytes),
-        name: filename,
-        mimeType: 'image/${filename.split('.').last}',
-      );
-      await Share.shareXFiles([xfile]);
+      if (kIsWeb) {
+        final shared = await web_sharing.shareUrl(url);
+        if (!shared) {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
+        }
+      } else {
+        await Share.shareUri(Uri.parse(url));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
