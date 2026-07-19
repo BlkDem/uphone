@@ -66,25 +66,59 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           ),
         ],
       ),
-      body: PhotoViewGallery.builder(
-        pageController: _pageController,
-        itemCount: widget.messages.length,
-        builder: (context, index) {
-          final msg = widget.messages[index];
-          return PhotoViewGalleryPageOptions(
-            imageProvider: CachedNetworkImageProvider(msg.fileUrl),
-            initialScale: PhotoViewComputedScale.contained,
-            minScale: PhotoViewComputedScale.contained,
-            maxScale: PhotoViewComputedScale.covered * 3,
-          );
-        },
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
-        loadingBuilder: (context, event) => const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-        backgroundDecoration: const BoxDecoration(color: Colors.black),
+      body: Stack(
+        children: [
+          PhotoViewGallery.builder(
+            pageController: _pageController,
+            itemCount: widget.messages.length,
+            builder: (context, index) {
+              final msg = widget.messages[index];
+              return PhotoViewGalleryPageOptions(
+                imageProvider: CachedNetworkImageProvider(msg.fileUrl),
+                initialScale: PhotoViewComputedScale.contained,
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+              );
+            },
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+            },
+            loadingBuilder: (context, event) => const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+            backgroundDecoration: const BoxDecoration(color: Colors.black),
+          ),
+          if (_currentIndex > 0)
+            Positioned(
+              left: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: _NavButton(
+                  icon: Icons.chevron_left,
+                  onPressed: () => _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  ),
+                ),
+              ),
+            ),
+          if (_currentIndex < widget.messages.length - 1)
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: _NavButton(
+                  icon: Icons.chevron_right,
+                  onPressed: () => _pageController.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -147,5 +181,28 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         );
       }
     }
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _NavButton({required this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 28),
+      ),
+    );
   }
 }
