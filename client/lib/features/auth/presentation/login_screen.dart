@@ -202,17 +202,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _showAddServer(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: _AddEditServerSheet(
-            onSave: (server) async {
-              await ServerConfig.instance.add(server);
-              setState(() => _selectedServerId = server.id);
-              ref.invalidate(apiClientProvider);
-            },
-          ),
-        ),
+      builder: (ctx) => _AddEditServerDialog(
+        onSave: (server) async {
+          await ServerConfig.instance.add(server);
+          setState(() => _selectedServerId = server.id);
+          ref.invalidate(apiClientProvider);
+        },
       ),
     );
   }
@@ -327,17 +322,12 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
     Navigator.pop(context);
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: _AddEditServerSheet(
-            onSave: (server) async {
-              await ServerConfig.instance.add(server);
-              widget.onSelected(server.id);
-              widget.onChanged?.call();
-            },
-          ),
-        ),
+      builder: (ctx) => _AddEditServerDialog(
+        onSave: (server) async {
+          await ServerConfig.instance.add(server);
+          widget.onSelected(server.id);
+          widget.onChanged?.call();
+        },
       ),
     );
   }
@@ -346,22 +336,17 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
     Navigator.pop(context);
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: _AddEditServerSheet(
-            server: server,
-            onSave: (updated) async {
-              await ServerConfig.instance.update(updated);
-              widget.onChanged?.call();
-            },
-            onDelete: () async {
-              await ServerConfig.instance.remove(server.id);
-              widget.onSelected(ServerConfig.instance.selected.id);
-              widget.onChanged?.call();
-            },
-          ),
-        ),
+      builder: (ctx) => _AddEditServerDialog(
+        server: server,
+        onSave: (updated) async {
+          await ServerConfig.instance.update(updated);
+          widget.onChanged?.call();
+        },
+        onDelete: () async {
+          await ServerConfig.instance.remove(server.id);
+          widget.onSelected(ServerConfig.instance.selected.id);
+          widget.onChanged?.call();
+        },
       ),
     );
   }
@@ -391,22 +376,22 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
   }
 }
 
-class _AddEditServerSheet extends StatefulWidget {
+class _AddEditServerDialog extends StatefulWidget {
   final ServerEntry? server;
   final void Function(ServerEntry server) onSave;
   final VoidCallback? onDelete;
 
-  const _AddEditServerSheet({
+  const _AddEditServerDialog({
     this.server,
     required this.onSave,
     this.onDelete,
   });
 
   @override
-  State<_AddEditServerSheet> createState() => _AddEditServerSheetState();
+  State<_AddEditServerDialog> createState() => _AddEditServerDialogState();
 }
 
-class _AddEditServerSheetState extends State<_AddEditServerSheet> {
+class _AddEditServerDialogState extends State<_AddEditServerDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _hostController;
@@ -433,20 +418,15 @@ class _AddEditServerSheetState extends State<_AddEditServerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: SingleChildScrollView(
+    return AlertDialog(
+      title: Text(widget.server == null ? 'Add Server' : 'Edit Server'),
+      content: SizedBox(
+        width: 350,
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                widget.server == null ? 'Add Server' : 'Edit Server',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
@@ -467,61 +447,49 @@ class _AddEditServerSheetState extends State<_AddEditServerSheet> {
                 validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _portController,
-                      decoration: const InputDecoration(
-                        labelText: 'Port',
-                        prefixIcon: Icon(Icons.numbers),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        final n = int.tryParse(v.trim());
-                        if (n == null || n < 1 || n > 65535) return 'Invalid port';
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SwitchListTile(
-                      title: const Text('TLS'),
-                      value: _useTls,
-                      onChanged: (v) => setState(() => _useTls = v),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
+              TextFormField(
+                controller: _portController,
+                decoration: const InputDecoration(
+                  labelText: 'Port',
+                  prefixIcon: Icon(Icons.numbers),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  final n = int.tryParse(v.trim());
+                  if (n == null || n < 1 || n > 65535) return 'Invalid port';
+                  return null;
+                },
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  if (widget.onDelete != null)
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Delete'),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                      onPressed: widget.onDelete,
-                    ),
-                  const Spacer(),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _save,
-                    child: const Text('Save'),
-                  ),
-                ],
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('TLS'),
+                value: _useTls,
+                onChanged: (v) => setState(() => _useTls = v),
+                contentPadding: EdgeInsets.zero,
               ),
             ],
           ),
         ),
       ),
+      actions: [
+        if (widget.onDelete != null)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Delete'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: widget.onDelete,
+          ),
+        const Spacer(),
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 
