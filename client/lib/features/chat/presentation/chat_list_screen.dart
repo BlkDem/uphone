@@ -29,6 +29,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         title: Text('UPhone'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.people_outline),
+            tooltip: 'Contacts',
+            onPressed: () => context.go('/contacts'),
+          ),
+          IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {},
           ),
