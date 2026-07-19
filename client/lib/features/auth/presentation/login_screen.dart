@@ -200,14 +200,86 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showAddServer(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final hostCtrl = TextEditingController();
+    final portCtrl = TextEditingController(text: '8080');
+    bool useTls = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => _AddEditServerDialog(
-        onSave: (server) async {
-          await ServerConfig.instance.add(server);
-          setState(() => _selectedServerId = server.id);
-          ref.invalidate(apiClientProvider);
-        },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Server'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: hostCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Host',
+                    hintText: '192.168.1.18',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: portCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Port',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text('TLS'),
+                    const Spacer(),
+                    Switch(
+                      value: useTls,
+                      onChanged: (v) => setDialogState(() => useTls = v),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                final host = hostCtrl.text.trim();
+                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                if (name.isEmpty || host.isEmpty) return;
+                Navigator.pop(ctx);
+                final server = ServerEntry(
+                  id: ServerConfig.generateId(),
+                  name: name,
+                  host: host,
+                  port: port,
+                  useTls: useTls,
+                );
+                ServerConfig.instance.add(server).then((_) {
+                  setState(() => _selectedServerId = server.id);
+                  ref.invalidate(apiClientProvider);
+                });
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -320,33 +392,93 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
 
   void _showAddServer(BuildContext context) {
     Navigator.pop(context);
+    final nameCtrl = TextEditingController();
+    final hostCtrl = TextEditingController();
+    final portCtrl = TextEditingController(text: '8080');
+    bool useTls = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => _AddEditServerDialog(
-        onSave: (server) async {
-          await ServerConfig.instance.add(server);
-          widget.onSelected(server.id);
-          widget.onChanged?.call();
-        },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Server'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: hostCtrl, decoration: const InputDecoration(labelText: 'Host', hintText: '192.168.1.18', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: portCtrl, decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()), keyboardType: TextInputType.number),
+                const SizedBox(height: 8),
+                Row(children: [const Text('TLS'), const Spacer(), Switch(value: useTls, onChanged: (v) => setDialogState(() => useTls = v))]),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                final host = hostCtrl.text.trim();
+                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                if (name.isEmpty || host.isEmpty) return;
+                Navigator.pop(ctx);
+                final server = ServerEntry(id: ServerConfig.generateId(), name: name, host: host, port: port, useTls: useTls);
+                ServerConfig.instance.add(server).then((_) {
+                  widget.onSelected(server.id);
+                  widget.onChanged?.call();
+                });
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showEditServer(BuildContext context, ServerEntry server) {
     Navigator.pop(context);
+    final nameCtrl = TextEditingController(text: server.name);
+    final hostCtrl = TextEditingController(text: server.host);
+    final portCtrl = TextEditingController(text: server.port.toString());
+    bool useTls = server.useTls;
+
     showDialog(
       context: context,
-      builder: (ctx) => _AddEditServerDialog(
-        server: server,
-        onSave: (updated) async {
-          await ServerConfig.instance.update(updated);
-          widget.onChanged?.call();
-        },
-        onDelete: () async {
-          await ServerConfig.instance.remove(server.id);
-          widget.onSelected(ServerConfig.instance.selected.id);
-          widget.onChanged?.call();
-        },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Edit Server'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: hostCtrl, decoration: const InputDecoration(labelText: 'Host', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: portCtrl, decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()), keyboardType: TextInputType.number),
+                const SizedBox(height: 8),
+                Row(children: [const Text('TLS'), const Spacer(), Switch(value: useTls, onChanged: (v) => setDialogState(() => useTls = v))]),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                final host = hostCtrl.text.trim();
+                final port = int.tryParse(portCtrl.text.trim()) ?? 8080;
+                if (name.isEmpty || host.isEmpty) return;
+                Navigator.pop(ctx);
+                final updated = server.copyWith(name: name, host: host, port: port, useTls: useTls);
+                ServerConfig.instance.update(updated).then((_) => widget.onChanged?.call());
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -373,137 +505,5 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
         ],
       ),
     );
-  }
-}
-
-class _AddEditServerDialog extends StatefulWidget {
-  final ServerEntry? server;
-  final void Function(ServerEntry server) onSave;
-  final VoidCallback? onDelete;
-
-  const _AddEditServerDialog({
-    this.server,
-    required this.onSave,
-    this.onDelete,
-  });
-
-  @override
-  State<_AddEditServerDialog> createState() => _AddEditServerDialogState();
-}
-
-class _AddEditServerDialogState extends State<_AddEditServerDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
-  late final TextEditingController _hostController;
-  late final TextEditingController _portController;
-  late bool _useTls;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.server?.name ?? '');
-    _hostController = TextEditingController(text: widget.server?.host ?? '');
-    _portController = TextEditingController(
-        text: (widget.server?.port ?? 8080).toString());
-    _useTls = widget.server?.useTls ?? false;
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _hostController.dispose();
-    _portController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.server == null ? 'Add Server' : 'Edit Server'),
-      content: SizedBox(
-        width: 350,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  prefixIcon: Icon(Icons.label_outline),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _hostController,
-                decoration: const InputDecoration(
-                  labelText: 'Host',
-                  hintText: '192.168.1.18',
-                  prefixIcon: Icon(Icons.language),
-                ),
-                keyboardType: TextInputType.url,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _portController,
-                decoration: const InputDecoration(
-                  labelText: 'Port',
-                  prefixIcon: Icon(Icons.numbers),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Required';
-                  final n = int.tryParse(v.trim());
-                  if (n == null || n < 1 || n > 65535) return 'Invalid port';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                title: const Text('TLS'),
-                value: _useTls,
-                onChanged: (v) => setState(() => _useTls = v),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        if (widget.onDelete != null)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Delete'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: widget.onDelete,
-          ),
-        const Spacer(),
-        OutlinedButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
-
-  void _save() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    final port = int.tryParse(_portController.text.trim()) ?? 8080;
-    final server = ServerEntry(
-      id: widget.server?.id ?? ServerConfig.generateId(),
-      name: _nameController.text.trim(),
-      host: _hostController.text.trim(),
-      port: port,
-      useTls: _useTls,
-    );
-    widget.onSave(server);
-    Navigator.pop(context);
   }
 }
