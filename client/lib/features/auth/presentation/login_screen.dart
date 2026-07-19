@@ -422,91 +422,92 @@ class _AddEditServerSheetState extends State<_AddEditServerSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.server == null ? 'Add Server' : 'Edit Server',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                prefixIcon: Icon(Icons.label_outline),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.server == null ? 'Add Server' : 'Edit Server',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _hostController,
-              decoration: const InputDecoration(
-                labelText: 'Host',
-                hintText: '192.168.1.18',
-                prefixIcon: Icon(Icons.language),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  prefixIcon: Icon(Icons.label_outline),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
               ),
-              keyboardType: TextInputType.url,
-              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _portController,
-                    decoration: const InputDecoration(
-                      labelText: 'Port',
-                      prefixIcon: Icon(Icons.numbers),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _hostController,
+                decoration: const InputDecoration(
+                  labelText: 'Host',
+                  hintText: '192.168.1.18',
+                  prefixIcon: Icon(Icons.language),
+                ),
+                keyboardType: TextInputType.url,
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _portController,
+                      decoration: const InputDecoration(
+                        labelText: 'Port',
+                        prefixIcon: Icon(Icons.numbers),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        final n = int.tryParse(v.trim());
+                        if (n == null || n < 1 || n > 65535) return 'Invalid port';
+                        return null;
+                      },
                     ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      final n = int.tryParse(v.trim());
-                      if (n == null || n < 1 || n > 65535) return 'Invalid port';
-                      return null;
-                    },
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SwitchListTile(
-                    title: const Text('TLS'),
-                    value: _useTls,
-                    onChanged: (v) => setState(() => _useTls = v),
-                    contentPadding: EdgeInsets.zero,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SwitchListTile(
+                      title: const Text('TLS'),
+                      value: _useTls,
+                      onChanged: (v) => setState(() => _useTls = v),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (widget.onDelete != null)
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Delete'),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                    onPressed: widget.onDelete,
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  if (widget.onDelete != null)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                      onPressed: widget.onDelete,
+                    ),
+                  const Spacer(),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
                   ),
-                const Spacer(),
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _save,
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _save,
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
