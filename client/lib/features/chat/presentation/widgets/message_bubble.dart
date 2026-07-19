@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
+import 'package:uphone_client/core/utils/html_media_player.dart';
 
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -179,6 +180,62 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _actionButton(
+                context,
+                icon: Icons.download,
+                tooltip: 'Save',
+                onPressed: () => _downloadFile(context),
+              ),
+              const SizedBox(width: 4),
+              _actionButton(
+                context,
+                icon: Icons.share,
+                tooltip: 'Share',
+                onPressed: () => _shareFile(context),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (message.type == 'video') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          buildVideoPlayer(message.fileUrl),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _actionButton(
+                context,
+                icon: Icons.download,
+                tooltip: 'Save',
+                onPressed: () => _downloadFile(context),
+              ),
+              const SizedBox(width: 4),
+              _actionButton(
+                context,
+                icon: Icons.share,
+                tooltip: 'Share',
+                onPressed: () => _shareFile(context),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (message.type == 'voice') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          buildAudioPlayer(message.fileUrl),
           const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
