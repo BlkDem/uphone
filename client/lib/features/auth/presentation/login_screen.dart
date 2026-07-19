@@ -73,10 +73,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.chat_rounded,
-                    size: 72,
-                    color: Theme.of(context).colorScheme.primary,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 96,
+                      height: 96,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(
