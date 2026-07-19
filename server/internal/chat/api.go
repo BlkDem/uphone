@@ -14,10 +14,11 @@ import (
 type APIHandler struct {
 	repo     *Repository
 	userRepo *users.Repository
+	hub      *Hub
 }
 
-func NewAPIHandler(repo *Repository, userRepo *users.Repository) *APIHandler {
-	return &APIHandler{repo: repo, userRepo: userRepo}
+func NewAPIHandler(repo *Repository, userRepo *users.Repository, hub *Hub) *APIHandler {
+	return &APIHandler{repo: repo, userRepo: userRepo, hub: hub}
 }
 
 func (h *APIHandler) resolveMembers(r *http.Request, members []string, selfID string) ([]string, error) {
@@ -159,6 +160,23 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		log.Printf("SendMessage error: chatID=%s userID=%s err=%v", chatID, userID, err)
 		shared.WriteError(w, http.StatusInternalServerError, "failed to send message")
 		return
+	}
+
+	sender, _ := h.repo.getSenderInfo(r.Context(), userID)
+	if sender != nil {
+		msg.Sender = sender
+	}
+
+	members, err := h.repo.GetMembers(r.Context(), chatID)
+	if err == nil && len(members) > 0 {
+		userIDs := make([]string, len(members))
+		for i, m := range members {
+			userIDs[i] = m.UserID
+		}
+		h.hub.BroadcastToUsers(userIDs, &Envelope{
+			Type:    "message.new",
+			Payload: msg,
+		})
 	}
 
 	shared.WriteJSON(w, http.StatusCreated, msg)
@@ -454,4 +472,94 @@ func (h *APIHandler) DeleteChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "chat deleted"})
+}
+
+func (h *APIHandler) GetMediaMessages(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	chatID := r.PathValue("id")
+
+	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
+	if err != nil || !isMember {
+		shared.WriteError(w, http.StatusForbidden, "not a member")
+		return
+	}
+
+	mediaType := r.URL.Query().Get("type")
+	limit := 50
+	offset := 0
+
+	messages, err := h.repo.GetMediaMessages(r.Context(), chatID, mediaType, limit, offset)
+	if err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to get media messages")
+		return
+	}
+
+	if messages == nil {
+		messages = []Message{}
+	}
+
+	shared.WriteJSON(w, http.StatusOK, messages)
+}
+
+func (h *APIHandler) ForwardMessage(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	chatID := r.PathValue("id")
+	msgID := r.PathValue("msgId")
+
+	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
+	if err != nil || !isMember {
+		shared.WriteError(w, http.StatusForbidden, "not a member")
+		return
+	}
+
+	msg, err := h.repo.GetMessageByID(r.Context(), msgID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "message not found")
+		return
+	}
+
+	var req struct {
+		ChatID string `json:"chat_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	isTargetMember, err := h.repo.IsMember(r.Context(), req.ChatID, userID)
+	if err != nil || !isTargetMember {
+		shared.WriteError(w, http.StatusForbidden, "not a member of target chat")
+		return
+	}
+
+	newMsg := &Message{
+		SenderID: userID,
+		Content:  msg.Content,
+		Type:     msg.Type,
+		FileURL:  msg.FileURL,
+	}
+
+	if err := h.repo.ForwardMessage(r.Context(), req.ChatID, newMsg); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to forward message")
+		return
+	}
+
+	sender, _ := h.repo.getSenderInfo(r.Context(), userID)
+	if sender != nil {
+		newMsg.Sender = sender
+	}
+
+	members, err := h.repo.GetMembers(r.Context(), req.ChatID)
+	if err == nil && len(members) > 0 {
+		userIDs := make([]string, len(members))
+		for i, m := range members {
+			userIDs[i] = m.UserID
+		}
+		h.hub.BroadcastToUsers(userIDs, &Envelope{
+			Type:    "message.new",
+			Payload: newMsg,
+		})
+	}
+
+	shared.WriteJSON(w, http.StatusCreated, newMsg)
 }

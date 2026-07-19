@@ -69,6 +69,22 @@ class ChatRepository {
     return data.cast<Map<String, dynamic>>();
   }
 
+  Future<List<ChatMessage>> getMediaMessages(String chatId, {String? mediaType}) async {
+    final params = <String, dynamic>{};
+    if (mediaType != null) params['type'] = mediaType;
+    final response = await _dio.get('/api/v1/chats/$chatId/media', queryParameters: params);
+    final data = response.data as List;
+    return data.map((json) => ChatMessage.fromJson(json)).toList();
+  }
+
+  Future<ChatMessage> forwardMessage(String chatId, String msgId, String targetChatId) async {
+    final response = await _dio.post(
+      '/api/v1/chats/$chatId/messages/$msgId/forward',
+      data: {'chat_id': targetChatId},
+    );
+    return ChatMessage.fromJson(response.data);
+  }
+
   Future<Map<String, String>> uploadFile(String filename, String mimeType, Uint8List bytes) async {
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(
