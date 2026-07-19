@@ -14,6 +14,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/uphone/server/internal/auth"
 	"github.com/uphone/server/internal/chat"
+	"github.com/uphone/server/internal/contacts"
 	"github.com/uphone/server/internal/config"
 	"github.com/uphone/server/internal/infrastructure/database"
 	"github.com/uphone/server/internal/middleware"
@@ -48,6 +49,9 @@ func main() {
 	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub)
 	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub)
 	uploadHandler := chat.NewUploadHandler(absUploadDir, fmt.Sprintf("http://192.168.1.18:%d", cfg.ServerPort))
+
+	contactsRepo := contacts.NewRepository(db)
+	contactsHandler := contacts.NewHandler(contactsRepo)
 
 	tokenValidator := func(tokenString string) (string, error) {
 		return authService.ValidateToken(tokenString)
@@ -100,6 +104,14 @@ func main() {
 			api.HandleFunc("POST /chats/{id}/members", chatAPI.AddMember)
 			api.HandleFunc("DELETE /chats/{id}/members/{memberId}", chatAPI.RemoveMember)
 			api.HandleFunc("POST /chats/{id}/leave", chatAPI.LeaveChat)
+
+			api.HandleFunc("GET /contacts", contactsHandler.List)
+			api.HandleFunc("POST /contacts", contactsHandler.Create)
+			api.HandleFunc("GET /contacts/export", contactsHandler.Export)
+			api.HandleFunc("POST /contacts/import", contactsHandler.Import)
+			api.HandleFunc("GET /contacts/{id}", contactsHandler.Get)
+			api.HandleFunc("PUT /contacts/{id}", contactsHandler.Update)
+			api.HandleFunc("DELETE /contacts/{id}", contactsHandler.Delete)
 		})
 	})
 
