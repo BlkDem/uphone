@@ -11,17 +11,22 @@ Widget buildVideoPlayerImpl(String url, {double height = 200}) {
   if (!_registeredViews.contains(viewId)) {
     _registeredViews.add(viewId);
     ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+      final wrapper = web.document.createElement('div');
+      wrapper.setAttribute('style',
+          'width:100%;max-height:${height}px;display:flex;justify-content:center;align-items:center;background:#000;border-radius:8px;overflow:hidden;');
       final video = web.document.createElement('video') as HTMLVideoElement;
       video.src = url;
       video.setAttribute('controls', '');
       video.setAttribute('style',
-          'width:100%;height:100%;object-fit:contain;background:#000;border-radius:8px;');
+          'max-width:100%;max-height:${height}px;display:block;');
       video.setAttribute('playsinline', '');
-      return video;
+      wrapper.appendChild(video);
+      return wrapper;
     });
   }
   return SizedBox(
     height: height,
+    width: double.infinity,
     child: HtmlElementView(viewType: viewId),
   );
 }
