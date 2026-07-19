@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
-import '../config/app_config.dart';
 
 typedef WSMessageHandler = void Function(Map<String, dynamic> message);
 typedef TokenProvider = Future<String?> Function();
@@ -16,6 +15,7 @@ class WsClient {
   int _reconnectAttempts = 0;
   static const int _maxReconnectDelay = 60;
   static const int _maxReconnectAttempts = 5;
+  String? _wsUrl;
   final Map<String, WSMessageHandler> _messageHandlers = {};
   WSMessageHandler? _onConnect;
   WSMessageHandler? _onDisconnect;
@@ -38,12 +38,14 @@ class WsClient {
   }
 
   void connect(String token, {
+    String? wsUrl,
     WSMessageHandler? onMessage,
     WSMessageHandler? onConnect,
     WSMessageHandler? onDisconnect,
     TokenProvider? tokenProvider,
   }) {
     _token = token;
+    _wsUrl = wsUrl;
     _tokenProvider = tokenProvider;
     if (onMessage != null) {
       _messageHandlers['_default'] = onMessage;
@@ -72,7 +74,7 @@ class WsClient {
     }
 
     try {
-      final uri = Uri.parse('${AppConfig.wsUrl}?token=$_token');
+      final uri = Uri.parse('${_wsUrl ?? "ws://localhost:8080/ws"}?token=$_token');
       _channel = WebSocketChannel.connect(uri);
 
       _channel!.stream.listen(

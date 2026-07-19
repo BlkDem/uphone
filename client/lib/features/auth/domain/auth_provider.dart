@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:uphone_client/core/network/api_client.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
+import 'package:uphone_client/core/config/server_config.dart';
 import 'package:uphone_client/shared/models/user.dart';
 import 'package:uphone_client/features/auth/data/auth_repository.dart';
 
@@ -31,8 +32,13 @@ class AuthState {
   }
 }
 
-final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
-final wsClientProvider = Provider<WsClient>((ref) => WsClient());
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(ServerConfig.instance.apiBaseUrl);
+});
+
+final wsClientProvider = Provider<WsClient>((ref) {
+  return WsClient();
+});
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.read(apiClientProvider).dio);
@@ -101,6 +107,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _connectWs(String accessToken) {
     _wsClient.connect(
       accessToken,
+      wsUrl: ServerConfig.instance.wsUrl,
       tokenProvider: () async {
         await _apiClient.refreshAccessToken();
         return _apiClient.accessToken;
