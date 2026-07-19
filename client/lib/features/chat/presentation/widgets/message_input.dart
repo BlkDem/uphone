@@ -105,6 +105,27 @@ class _MessageInputState extends State<MessageInput> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    if (widget.onSendFile == null) return;
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          final ext = file.name.split('.').last.toLowerCase();
+          final mimeType = _getMimeType(ext);
+          _sendFile(file.name, mimeType, file.bytes!);
+        }
+      }
+    } catch (e) {
+      debugPrint('Video pick failed: $e');
+    }
+  }
+
   Future<void> _pickFile() async {
     if (widget.onSendFile == null) return;
 
@@ -237,6 +258,12 @@ class _MessageInputState extends State<MessageInput> {
                 onPressed: _isUploading ? null : _pickImage,
                 color: colorScheme.onSurfaceVariant,
                 tooltip: 'Image',
+              ),
+              IconButton(
+                icon: const Icon(Icons.videocam_outlined),
+                onPressed: _isUploading ? null : _pickVideo,
+                color: colorScheme.onSurfaceVariant,
+                tooltip: 'Video',
               ),
               IconButton(
                 icon: const Icon(Icons.attach_file),
