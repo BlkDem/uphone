@@ -398,14 +398,15 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           onTap: _toggleMute,
           color: _isMuted ? colorScheme.error : colorScheme.onSurface,
         ),
-        const SizedBox(width: 32),
-        if (widget.callType == 'video')
+        if (widget.callType == 'video') ...[
+          const SizedBox(width: 32),
           _ControlButton(
             icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
             label: _isVideoOff ? 'Camera On' : 'Camera Off',
             onTap: _toggleCamera,
             color: _isVideoOff ? colorScheme.error : colorScheme.onSurface,
           ),
+        ],
       ],
     );
   }
