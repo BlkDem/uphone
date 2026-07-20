@@ -82,6 +82,34 @@ sudo bash deploy/deploy.sh --skip-flutter-build     # только сервер,
 
 Если Flutter web клиент собран локально — скопируйте `client/build/web/` на сервер в `/var/www/uphone/` и запустите с `--skip-flutter-build`.
 
+### Сборка Flutter web локально
+
+На VPS с 1 GB RAM билд Flutter может не хватить памяти. Проще собрать локально:
+
+```bash
+cd client
+flutter pub get
+flutter build web --dart-define=API_BASE_URL=/api/v1 --dart-define=WS_URL=/ws
+
+# Архив для деплоя
+cd ..
+zip -r deploy/web-build.zip client/build/web/
+```
+
+Затем скопировать на сервер:
+
+```bash
+# Копируем архив
+scp deploy/web-build.zip root@<IP>:/tmp/
+
+# На сервере распаковываем и деплоим
+ssh root@<IP>
+unzip /tmp/web-build.zip -d /var/www/uphone/
+sudo bash /opt/uphone/deploy/deploy.sh --skip-flutter-build
+```
+
+Билд: ~46 MB (main.dart.js = 5.5 MB), архив ~17 MB.
+
 ## Рекомендации по железу
 
 Приватный клуб до ~10 пользователей. Минимальные требования:
