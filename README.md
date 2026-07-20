@@ -67,6 +67,7 @@ journalctl -u uphone -f
 | Веб-клиент | `http://<IP>` |
 | API | `http://<IP>/api/v1` |
 | WebSocket | `ws://<IP>/ws` |
+| Админка | `http://<IP>/admin` |
 | Health | `http://<IP>:8080/health` |
 
 Конфиг: `/etc/uphone/uphone.env`
@@ -85,6 +86,7 @@ sudo bash deploy/deploy.sh
 - **БД:** MariaDB 11
 - **Файлы:** Локальная FS (`/var/lib/uphone/uploads`)
 - **Прокси:** Apache2 (reverse proxy, WebSocket, static files)
+- **Админка:** Веб-интерфейс на Go templates, встроенный в бинарник
 
 ## Структура проекта
 
@@ -98,8 +100,8 @@ uphone/
 │
 ├── server/           # Go сервер
 │   ├── cmd/server/   # Точка входа (main.go)
-│   ├── internal/     # config, auth, chat, contacts, users, webrtc, middleware
-│   └── migrations/   # SQL миграции (001_init, 002_google_oauth, 003_contacts)
+│   ├── internal/     # config, auth, chat, contacts, users, webrtc, admin, middleware
+│   └── migrations/   # SQL миграции (001_init..004_admin)
 │
 ├── deploy/           # Скрипт развёртывания
 │   ├── deploy.sh     # Основной скрипт
@@ -146,4 +148,23 @@ uphone/
 | DELETE | `/api/v1/contacts/:id` | Удалить контакт |
 | GET | `/api/v1/contacts/export?format=vcard\|csv` | Экспорт |
 | POST | `/api/v1/contacts/import?format=vcard\|csv` | Импорт |
+| GET | `/api/v1/admin/users` | Список пользователей (admin) |
+| POST | `/api/v1/admin/users` | Создать пользователя (admin) |
+| DELETE | `/api/v1/admin/users/:id` | Удалить пользователя (admin) |
+| PUT | `/api/v1/admin/users/:id/role` | Сменить роль (admin) |
+| POST | `/api/v1/admin/users/:id/password` | Сменить пароль (admin) |
 | WS | `/ws?token=` | WebSocket |
+
+## Админ-панель
+
+Веб-интерфейс для управления пользователями, встроенный в Go-сервер.
+
+```
+http://localhost:8080/admin
+```
+
+По умолчанию: `blkdem@blkdem.ru` / `12345678`
+
+Функции: список пользователей, создание, удаление, смена ролей (admin/user), смена паролей.
+
+Авторизация через JWT cookie (`admin_token`). Сессия действует 15 минут (как access token).
