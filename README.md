@@ -76,8 +76,11 @@ journalctl -u uphone -f
 
 ```bash
 cd /opt/uphone
-sudo bash deploy/deploy.sh
+sudo bash deploy/deploy.sh                          # полный деплой (включая билд Flutter)
+sudo bash deploy/deploy.sh --skip-flutter-build     # только сервер, без пересборки клиента
 ```
+
+Если Flutter web клиент собран локально — скопируйте `client/build/web/` на сервер в `/var/www/uphone/` и запустите с `--skip-flutter-build`.
 
 ## Рекомендации по железу
 

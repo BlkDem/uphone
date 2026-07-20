@@ -16,6 +16,13 @@ DB_NAME="uphone"
 DB_USER="uphone"
 GO_VERSION="1.24.4"
 FLUTTER_CHANNEL="stable"
+SKIP_FLUTTER_BUILD=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --skip-flutter-build) SKIP_FLUTTER_BUILD=true ;;
+    esac
+done
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,17 +117,23 @@ export PATH="/usr/local/go/bin:$PATH"
 CGO_ENABLED=0 go build -o uphone-server ./cmd/server/
 
 # ---- 7. Build Flutter web client ----
-log "Building Flutter web client..."
-cd "${DEPLOY_DIR}/client"
-export PATH="/opt/flutter-sdk/bin:$PATH"
-flutter pub get
-flutter build web \
-    --dart-define=API_BASE_URL=http://${DEPLOYED_IP:-$DETECTED_IP} \
-    --dart-define=WS_URL=ws://${DEPLOYED_IP:-$DETECTED_IP}/ws
+if [[ "${SKIP_FLUTTER_BUILD}" == "true" ]]; then
+    log "Skipping Flutter build (--skip-flutter-build)"
+    if [[ ! -d "${WEB_DIR}/main.dart.js" && ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
+        warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
+    fi
+else
+    log "Building Flutter web client..."
+    cd "${DEPLOY_DIR}/client"
+    export PATH="/opt/flutter-sdk/bin:$PATH"
+    flutter pub get
+    flutter build web \
+        --dart-define=API_BASE_URL=http://${DEPLOYED_IP:-$DETECTED_IP} \
+        --dart-define=WS_URL=ws://${DEPLOYED_IP:-$DETECTED_IP}/ws
 
-# Copy web build to Apache document root
-rm -rf "${WEB_DIR:?}"/*
-cp -r build/web/* "${WEB_DIR}/"
+    rm -rf "${WEB_DIR:?}"/*
+    cp -r build/web/* "${WEB_DIR}/"
+fi
 
 # ---- 8. Configuration ----
 JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -200,6 +213,11 @@ cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
     ProxyPass /api/ http://127.0.0.1:8080/api/
     ProxyPassReverse /api/ http://127.0.0.1:8080/api/
 
+    ProxyPass /admin/ http://127.0.0.1:8080/admin/
+    ProxyPassReverse /admin/ http://127.0.0.1:8080/admin/
+    ProxyPass /admin http://127.0.0.1:8080/admin
+    ProxyPassReverse /admin http://127.0.0.1:8080/admin
+
     ProxyPass /uploads/ http://127.0.0.1:8080/uploads/
     ProxyPassReverse /uploads/ http://127.0.0.1:8080/uploads/
 
@@ -233,6 +251,7 @@ echo -e "${GREEN}  UPhone deployed successfully!${NC}"
 echo "============================================"
 echo ""
 echo "  Web client:  http://${DEPLOYED_IP:-$DETECTED_IP}"
+echo "  Admin panel: http://${DEPLOYED_IP:-$DETECTED_IP}/admin"
 echo "  API:         http://${DEPLOYED_IP:-$DETECTED_IP}/api/v1"
 echo "  WebSocket:   ws://${DEPLOYED_IP:-$DETECTED_IP}/ws"
 echo ""
@@ -243,5 +262,5 @@ echo ""
 echo "  DB user:     ${DB_USER}"
 echo "  DB pass:     ${DB_PASS}"
 echo ""
-echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0"
+echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build]"
 echo "============================================"
