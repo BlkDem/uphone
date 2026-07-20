@@ -90,7 +90,9 @@ sudo bash deploy/deploy.sh
 | **Сеть** | 100 Mbps, статический IP |
 | **Домен** | Не обязателен, можно по IP |
 
-Хватит самого дешёвого VPS (Hetzner CX22, Timeweb Cloud 1vCPU/1G, Yandex Cloud standard-v1). Go-сервер и MariaDB весят ~50 MB RAM в простое. При 10 пользователях нагрузка минимальна.
+Хватит самого дешёвого VPS (Hetzner CX22, Timeweb Cloud 1vCPU/1G, Yandex Cloud standard-v1). Go-сервер и MariaDB весят ~50 MB RAM в простое. Flutter web-клиент — статика ~20-50 MB на диске, раздача Apache2 почти ничего не ест.
+
+**Билд Flutter web** требует ~2-4 GB RAM. Рекомендуется билдить локально и копировать `build/web/` на сервер (`scp -r` или через CI). Если билдить на сервере — ставить swap 2 GB или брать VPS с 2+ GB RAM.
 
 Если нужен видеозвонок (WebRTC) — поднять на VPS с хорошим каналом (1 Gbps).
 
