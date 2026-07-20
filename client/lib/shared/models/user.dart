@@ -17,8 +17,6 @@ class User {
     this.status = 'offline',
   });
 
-  bool get isAdmin => role == 'admin';
-
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] ?? '',

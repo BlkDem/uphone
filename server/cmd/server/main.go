@@ -70,6 +70,15 @@ func main() {
 	}
 	authMw := middleware.AuthMiddleware(tokenValidator)
 
+	webAdminHandler := admin.NewWebHandler(userRepo, authService.CreateAccessToken)
+	webAuthMw := middleware.CookieAuthMiddleware(tokenValidator, func(userID string) (string, error) {
+		u, err := userRepo.GetByID(context.Background(), userID)
+		if err != nil {
+			return "", err
+		}
+		return u.Role, nil
+	})
+
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
@@ -141,6 +150,17 @@ func main() {
 			return
 		}
 		http.ServeFile(w, r, filePath)
+	})
+
+	r.Route("/admin", func(adminRouter chi.Router) {
+		adminRouter.Get("/", webAdminHandler.RedirectRoot)
+		adminRouter.Get("/login", webAdminHandler.LoginPage)
+		adminRouter.Post("/login", webAdminHandler.LoginPost)
+		adminRouter.Get("/logout", webAdminHandler.Logout)
+		adminRouter.Group(func(admin chi.Router) {
+			admin.Use(webAuthMw)
+			admin.Get("/*", webAdminHandler.Dashboard)
+		})
 	})
 
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

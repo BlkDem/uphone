@@ -325,3 +325,7 @@ func (s *Service) createToken(userID string, ttl time.Duration) (string, error) 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.jwtSecret)
 }
+
+func (s *Service) CreateAccessToken(userID string) (string, error) {
+	return s.createToken(userID, s.accessTTL)
+}

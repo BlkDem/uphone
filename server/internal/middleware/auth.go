@@ -19,19 +19,28 @@ type TokenValidator func(tokenString string) (string, error)
 func AuthMiddleware(validate TokenValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var token string
+
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+					token = parts[1]
+				}
+			}
+
+			if token == "" {
+				if cookie, err := r.Cookie("admin_token"); err == nil {
+					token = cookie.Value
+				}
+			}
+
+			if token == "" {
+				http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				http.Error(w, `{"error":"invalid authorization format"}`, http.StatusUnauthorized)
-				return
-			}
-
-			userID, err := validate(parts[1])
+			userID, err := validate(token)
 			if err != nil || userID == "" {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
