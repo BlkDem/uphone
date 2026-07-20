@@ -42,7 +42,12 @@ go test ./...
 ```bash
 git clone https://github.com/BlkDem/uphone.git
 cd uphone
+
+# По IP (без HTTPS)
 sudo bash deploy/deploy.sh
+
+# С доменом и HTTPS (Let's Encrypt)
+sudo bash deploy/deploy.sh --domain=chat.example.com
 ```
 
 Скрипт автоматически:
@@ -51,6 +56,7 @@ sudo bash deploy/deploy.sh
 - Собирает Go сервер и Flutter web-клиент
 - Настраивает systemd сервис и Apache2 (reverse proxy + WebSocket)
 - Генерирует JWT секрет
+- При `--domain` — получает SSL-сертификат Let's Encrypt, настраивает HTTPS + auto-renewal
 
 После запуска:
 ```bash
@@ -76,8 +82,9 @@ journalctl -u uphone -f
 
 ```bash
 cd /opt/uphone
-sudo bash deploy/deploy.sh                          # полный деплой (включая билд Flutter)
-sudo bash deploy/deploy.sh --skip-flutter-build     # только сервер, без пересборки клиента
+sudo bash deploy/deploy.sh                          # полный деплой
+sudo bash deploy/deploy.sh --skip-flutter-build     # без пересборки клиента
+sudo bash deploy/deploy.sh --domain=chat.example.com --skip-flutter-build  # с HTTPS
 ```
 
 Если Flutter web клиент собран локально — скопируйте `client/build/web/` на сервер в `/var/www/uphone/` и запустите с `--skip-flutter-build`.

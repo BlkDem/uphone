@@ -17,10 +17,12 @@ DB_USER="uphone"
 GO_VERSION="1.24.4"
 FLUTTER_CHANNEL="stable"
 SKIP_FLUTTER_BUILD=false
+DEPLOYED_DOMAIN=""
 
 for arg in "$@"; do
     case "$arg" in
         --skip-flutter-build) SKIP_FLUTTER_BUILD=true ;;
+        --domain=*)           DEPLOYED_DOMAIN="${arg#*=}" ;;
     esac
 done
 
@@ -119,7 +121,7 @@ CGO_ENABLED=0 go build -o uphone-server ./cmd/server/
 # ---- 7. Build Flutter web client ----
 if [[ "${SKIP_FLUTTER_BUILD}" == "true" ]]; then
     log "Skipping Flutter build (--skip-flutter-build)"
-    if [[ ! -d "${WEB_DIR}/main.dart.js" && ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
+    if [[ ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
         warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
     fi
 else
@@ -127,9 +129,19 @@ else
     cd "${DEPLOY_DIR}/client"
     export PATH="/opt/flutter-sdk/bin:$PATH"
     flutter pub get
+
+    BUILD_HOST="${DEPLOYED_IP:-$DETECTED_IP}"
+    BUILD_SCHEME="http"
+    BUILD_WS="ws"
+    if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+        BUILD_HOST="${DEPLOYED_DOMAIN}"
+        BUILD_SCHEME="https"
+        BUILD_WS="wss"
+    fi
+
     flutter build web \
-        --dart-define=API_BASE_URL=http://${DEPLOYED_IP:-$DETECTED_IP} \
-        --dart-define=WS_URL=ws://${DEPLOYED_IP:-$DETECTED_IP}/ws
+        --dart-define=API_BASE_URL=${BUILD_SCHEME}://${BUILD_HOST}/api/v1 \
+        --dart-define=WS_URL=${BUILD_WS}://${BUILD_HOST}/ws
 
     rm -rf "${WEB_DIR:?}"/*
     cp -r build/web/* "${WEB_DIR}/"
@@ -137,6 +149,11 @@ fi
 
 # ---- 8. Configuration ----
 JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+
+UPLOAD_BASE_URL="http://${DEPLOYED_IP:-$DETECTED_IP}"
+if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+    UPLOAD_BASE_URL="https://${DEPLOYED_DOMAIN}"
+fi
 
 if [[ ! -f "${CONF_DIR}/uphone.env" ]]; then
     log "Creating environment file..."
@@ -148,7 +165,7 @@ DB_PASSWORD=${DB_PASS}
 DB_NAME=${DB_NAME}
 SERVER_PORT=8080
 UPLOAD_DIR=${DATA_DIR}/uploads
-UPLOAD_BASE_URL=http://${DEPLOYED_IP:-$DETECTED_IP}
+UPLOAD_BASE_URL=${UPLOAD_BASE_URL}
 JWT_SECRET=${JWT_SECRET}
 GOOGLE_CLIENT_ID=
 EOF
@@ -188,9 +205,13 @@ systemctl enable --now ${APP_NAME}
 
 # ---- 10. Apache virtual host ----
 log "Configuring Apache2..."
+
+SERVER_NAME="${DEPLOYED_IP:-$DETECTED_IP}"
+
+# Generate HTTP config
 cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
 <VirtualHost *:80>
-    ServerName ${DEPLOYED_IP:-$DETECTED_IP}
+    ServerName ${SERVER_NAME}
 
     DocumentRoot ${WEB_DIR}
 
@@ -233,6 +254,102 @@ cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
 </VirtualHost>
 EOF
 
+# ---- 10b. Let's Encrypt SSL (optional) ----
+if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+    log "Setting up HTTPS for ${DEPLOYED_DOMAIN}..."
+
+    apt-get install -y -qq certbot python3-certbot-apache
+
+    # First get cert via standalone (needs port 80 free)
+    if [[ ! -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
+        log "Obtaining SSL certificate for ${DEPLOYED_DOMAIN}..."
+        systemctl stop apache2 2>/dev/null || true
+        certbot certonly --standalone -d "${DEPLOYED_DOMAIN}" \
+            --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
+            --preferred-challenges http || {
+            warn "certbot standalone failed, trying with apache plugin..."
+            systemctl start apache2 2>/dev/null || true
+            certbot --apache -d "${DEPLOYED_DOMAIN}" \
+                --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
+                --redirect --hsts || true
+        }
+        systemctl start apache2 2>/dev/null || true
+    fi
+
+    # Add SSL VirtualHost
+    if [[ -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
+        cat > /etc/apache2/sites-available/${APP_NAME}-ssl.conf <<SSLEOF
+<VirtualHost *:443>
+    ServerName ${DEPLOYED_DOMAIN}
+
+    DocumentRoot ${WEB_DIR}
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/privkey.pem
+
+    <Directory ${WEB_DIR}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+
+        RewriteEngine On
+        RewriteBase /
+        RewriteRule ^index\.html\$ - [L]
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule . /index.html [L]
+    </Directory>
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    ProxyPass /api/ http://127.0.0.1:8080/api/
+    ProxyPassReverse /api/ http://127.0.0.1:8080/api/
+
+    ProxyPass /admin/ http://127.0.0.1:8080/admin/
+    ProxyPassReverse /admin/ http://127.0.0.1:8080/admin/
+    ProxyPass /admin http://127.0.0.1:8080/admin
+    ProxyPassReverse /admin http://127.0.0.1:8080/admin
+
+    ProxyPass /uploads/ http://127.0.0.1:8080/uploads/
+    ProxyPassReverse /uploads/ http://127.0.0.1:8080/uploads/
+
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteCond %{HTTP:Connection} =upgrade [NC]
+    RewriteRule ^/ws(.*) ws://127.0.0.1:8080/ws\$1 [P,L]
+
+    ProxyPass /ws http://127.0.0.1:8080/ws
+    ProxyPassReverse /ws http://127.0.0.1:8080/ws
+
+    ErrorLog \${APACHE_LOG_DIR}/uphone_ssl_error.log
+    CustomLog \${APACHE_LOG_DIR}/uphone_ssl_access.log combined
+</VirtualHost>
+SSLEOF
+
+        a2enmod ssl -qq
+        a2ensite ${APP_NAME}-ssl.conf -qq
+
+        # Add HTTP -> HTTPS redirect
+        cat > /etc/apache2/sites-available/${APP_NAME}.conf <<REDIR
+<VirtualHost *:80>
+    ServerName ${DEPLOYED_DOMAIN}
+    Redirect permanent / https://${DEPLOYED_DOMAIN}/
+</VirtualHost>
+REDIR
+
+        # Auto-renewal cron
+        if ! crontab -l 2>/dev/null | grep -q certbot; then
+            (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | crontab -
+            log "Certbot auto-renewal cron job added"
+        fi
+
+        log "SSL configured for ${DEPLOYED_DOMAIN}"
+    else
+        warn "SSL certificate not found, HTTP-only mode"
+    fi
+fi
+
 a2dissite 000-default.conf -qq 2>/dev/null || true
 a2ensite ${APP_NAME}.conf -qq
 systemctl reload apache2
@@ -245,15 +362,24 @@ if command -v ufw &>/dev/null; then
 fi
 
 # ---- Done ----
+SCHEME="http"
+WS_SCHEME="ws"
+DISPLAY_HOST="${DEPLOYED_IP:-$DETECTED_IP}"
+if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+    SCHEME="https"
+    WS_SCHEME="wss"
+    DISPLAY_HOST="${DEPLOYED_DOMAIN}"
+fi
+
 echo ""
 echo "============================================"
 echo -e "${GREEN}  UPhone deployed successfully!${NC}"
 echo "============================================"
 echo ""
-echo "  Web client:  http://${DEPLOYED_IP:-$DETECTED_IP}"
-echo "  Admin panel: http://${DEPLOYED_IP:-$DETECTED_IP}/admin"
-echo "  API:         http://${DEPLOYED_IP:-$DETECTED_IP}/api/v1"
-echo "  WebSocket:   ws://${DEPLOYED_IP:-$DETECTED_IP}/ws"
+echo "  Web client:  ${SCHEME}://${DISPLAY_HOST}"
+echo "  Admin panel: ${SCHEME}://${DISPLAY_HOST}/admin"
+echo "  API:         ${SCHEME}://${DISPLAY_HOST}/api/v1"
+echo "  WebSocket:   ${WS_SCHEME}://${DISPLAY_HOST}/ws"
 echo ""
 echo "  Config:      ${CONF_DIR}/uphone.env"
 echo "  Logs:        journalctl -u ${APP_NAME} -f"
@@ -262,5 +388,5 @@ echo ""
 echo "  DB user:     ${DB_USER}"
 echo "  DB pass:     ${DB_PASS}"
 echo ""
-echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build]"
+echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
 echo "============================================"
