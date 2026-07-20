@@ -404,8 +404,24 @@ class WebRTCService {
   }
 
   Future<void> _createOfferForPeer(String callId, String remoteUserId) async {
-    if (_peerConnections.containsKey(remoteUserId)) return;
-    await _createPeerConnectionAndOffer(remoteUserId);
+    final pc = _peerConnections[remoteUserId];
+    if (pc == null) {
+      await _createPeerConnectionAndOffer(remoteUserId);
+      return;
+    }
+
+    final offer = await pc.createOffer({
+      'offerToReceiveAudio': true,
+      'offerToReceiveVideo': true,
+    });
+    await pc.setLocalDescription(offer);
+
+    _wsClient.send({
+      'type': 'offer',
+      'call_id': callId,
+      'to_user': remoteUserId,
+      'payload': {'sdp': offer.sdp},
+    });
   }
 
   Future<void> _handleAnswer(String fromUserId, String sdp) async {

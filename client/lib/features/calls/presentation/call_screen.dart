@@ -41,19 +41,26 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final Map<String, RTCVideoRenderer> _remoteRenderers = {};
   bool _localRendererReady = false;
+  MediaStream? _pendingLocalStream;
 
   @override
   void initState() {
     super.initState();
     _callStatus = widget.isIncoming ? 'Incoming call...' : 'Ringing...';
-    _listenStreams();
     _initRenderers();
+    _listenStreams();
   }
 
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
     if (mounted) {
-      setState(() => _localRendererReady = true);
+      setState(() {
+        _localRendererReady = true;
+        if (_pendingLocalStream != null) {
+          _localRenderer.srcObject = _pendingLocalStream;
+          _pendingLocalStream = null;
+        }
+      });
     }
   }
 
@@ -61,8 +68,11 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     final webrtc = ref.read(webRTCServiceProvider);
 
     _localSub = webrtc.localStreamEvents.listen((stream) {
-      if (mounted) {
+      if (!mounted) return;
+      if (_localRendererReady) {
         setState(() => _localRenderer.srcObject = stream);
+      } else {
+        _pendingLocalStream = stream;
       }
     });
 
@@ -212,10 +222,41 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     final hasVideo = widget.callType == 'video';
 
     if (!hasVideo) {
-      return _buildAvatarView(context);
+      final hasAudio = _localRenderer.srcObject != null || _remoteRenderers.isNotEmpty;
+      if (!hasAudio) return _buildAvatarView(context);
+      return Stack(
+        children: [
+          _buildAvatarView(context),
+          if (_localRenderer.srcObject != null)
+            Positioned(
+              width: 1,
+              height: 1,
+              child: RTCVideoView(_localRenderer),
+            ),
+          for (final entry in _remoteRenderers.entries)
+            Positioned(
+              width: 1,
+              height: 1,
+              child: RTCVideoView(entry.value),
+            ),
+        ],
+      );
     }
 
     if (remoteCount == 0) {
+      if (hasLocalVideo) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: RTCVideoView(
+                _localRenderer,
+                mirror: true,
+                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              ),
+            ),
+          ],
+        );
+      }
       return _buildAvatarView(context);
     }
 
@@ -326,7 +367,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
             radius: 60,
             backgroundColor: colorScheme.primaryContainer,
             child: Text(
-              (widget.remoteUserName ?? 'U')[0].toUpperCase(),
+              (widget.remoteUserName?.isNotEmpty == true ? widget.remoteUserName! : 'U')[0].toUpperCase(),
               style: TextStyle(
                 fontSize: 48,
                 color: colorScheme.onPrimaryContainer,
