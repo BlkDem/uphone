@@ -12,6 +12,8 @@ class CallScreen extends ConsumerStatefulWidget {
   final String? remoteUserName;
   final String callType;
   final bool isIncoming;
+  final bool isGroup;
+  final List<String> participants;
 
   const CallScreen({
     super.key,
@@ -20,6 +22,8 @@ class CallScreen extends ConsumerStatefulWidget {
     this.remoteUserName,
     this.callType = 'video',
     this.isIncoming = false,
+    this.isGroup = false,
+    this.participants = const [],
   });
 
   @override
@@ -31,13 +35,12 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   bool _isVideoOff = false;
   String _callStatus = 'Connecting...';
   StreamSubscription<MediaStream>? _localSub;
-  StreamSubscription<MediaStream>? _remoteSub;
+  StreamSubscription<RemoteStreamEvent>? _remoteSub;
   StreamSubscription<CallEvent>? _callEventSub;
 
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  final Map<String, RTCVideoRenderer> _remoteRenderers = {};
   bool _localRendererReady = false;
-  bool _remoteRendererReady = false;
 
   @override
   void initState() {
@@ -49,12 +52,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
 
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
     if (mounted) {
-      setState(() {
-        _localRendererReady = true;
-        _remoteRendererReady = true;
-      });
+      setState(() => _localRendererReady = true);
     }
   }
 
@@ -67,12 +66,25 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       }
     });
 
-    _remoteSub = webrtc.remoteStream.listen((stream) {
-      if (mounted) {
+    _remoteSub = webrtc.remoteStreamEvents.listen((event) async {
+      if (!mounted) return;
+
+      final renderer = _remoteRenderers[event.userId];
+      if (renderer != null) {
         setState(() {
-          _remoteRenderer.srcObject = stream;
+          renderer.srcObject = event.stream;
           _callStatus = 'In call';
         });
+      } else {
+        final newRenderer = RTCVideoRenderer();
+        await newRenderer.initialize();
+        newRenderer.srcObject = event.stream;
+        if (mounted) {
+          setState(() {
+            _remoteRenderers[event.userId] = newRenderer;
+            _callStatus = 'In call';
+          });
+        }
       }
     });
 
@@ -82,6 +94,18 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       switch (event) {
         case CallAcceptedEvent():
           setState(() => _callStatus = 'In call');
+          break;
+        case ConferenceJoinedEvent():
+          setState(() {
+            _callStatus = 'In call';
+          });
+          break;
+        case ParticipantJoinedEvent():
+          break;
+        case ParticipantLeftEvent():
+          final renderer = _remoteRenderers.remove(event.userId);
+          renderer?.dispose();
+          setState(() {});
           break;
         case CallRejectedEvent():
           setState(() => _callStatus = 'Call rejected');
@@ -101,7 +125,12 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     });
 
     if (widget.isIncoming && widget.callId != null && widget.remoteUserId != null) {
-      webrtc.acceptCall(widget.callId!, widget.remoteUserId!, callType: widget.callType);
+      webrtc.acceptCall(
+        widget.callId!,
+        widget.remoteUserId!,
+        callType: widget.callType,
+        isGroup: widget.isGroup,
+      );
     }
   }
 
@@ -111,7 +140,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     _remoteSub?.cancel();
     _callEventSub?.cancel();
     _localRenderer.dispose();
-    _remoteRenderer.dispose();
+    for (final r in _remoteRenderers.values) {
+      r.dispose();
+    }
+    _remoteRenderers.clear();
     super.dispose();
   }
 
@@ -133,47 +165,20 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final hasRemoteVideo = _remoteRendererReady && _remoteRenderer.srcObject != null;
-    final hasLocalVideo = _localRendererReady && _localRenderer.srcObject != null;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: Stack(
           children: [
-            if (hasRemoteVideo && widget.callType == 'video')
-              Positioned.fill(
-                child: RTCVideoView(
-                  _remoteRenderer,
-                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                ),
-              )
-            else
-              _buildAvatarView(context),
-
-            if (hasLocalVideo && widget.callType == 'video')
-              Positioned(
-                right: 16,
-                top: 16,
-                width: 120,
-                height: 160,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: RTCVideoView(
-                    _localRenderer,
-                    mirror: true,
-                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                  ),
-                ),
-              ),
-
+            _buildVideoGrid(context),
             Positioned(
               left: 0,
               right: 0,
               bottom: 40,
               child: Column(
                 children: [
-                  if (!hasRemoteVideo || widget.callType != 'video')
+                  if (_remoteRenderers.isEmpty)
                     Text(
                       _callStatus,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -198,6 +203,116 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildVideoGrid(BuildContext context) {
+    final hasLocalVideo = _localRendererReady && _localRenderer.srcObject != null;
+    final remoteCount = _remoteRenderers.length;
+    final hasVideo = widget.callType == 'video';
+
+    if (!hasVideo) {
+      return _buildAvatarView(context);
+    }
+
+    if (remoteCount == 0) {
+      return _buildAvatarView(context);
+    }
+
+    if (remoteCount == 1) {
+      final entry = _remoteRenderers.entries.first;
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: RTCVideoView(
+              entry.value,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            ),
+          ),
+          if (hasLocalVideo)
+            Positioned(
+              right: 16,
+              top: 16,
+              width: 120,
+              height: 160,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: RTCVideoView(
+                  _localRenderer,
+                  mirror: true,
+                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    final columns = remoteCount <= 2 ? 1 : 2;
+    final rows = ((remoteCount + 1) / columns).ceil();
+
+    return Column(
+      children: [
+        Expanded(
+          flex: rows,
+          child: Wrap(
+            children: [
+              for (final entry in _remoteRenderers.entries)
+                SizedBox(
+                  width: (MediaQuery.of(context).size.width / columns),
+                  height: (MediaQuery.of(context).size.height * 0.6 / rows),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: RTCVideoView(
+                          entry.value,
+                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                        ),
+                      ),
+                      Positioned(
+                        left: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            entry.key.substring(0, entry.key.length.clamp(0, 8)),
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (hasLocalVideo)
+          SizedBox(
+            height: 160,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 120,
+                    height: 160,
+                    child: RTCVideoView(
+                      _localRenderer,
+                      mirror: true,
+                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

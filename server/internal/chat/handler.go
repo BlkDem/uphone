@@ -103,15 +103,16 @@ func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMes
 		}
 		_ = req
 
-	case "call-request", "call-accept", "call-reject", "call-end",
-		"offer", "answer", "ice-candidate":
-		var sigMsg webrtc.SignalMessage
-		if err := json.Unmarshal(raw, &sigMsg); err != nil {
-			return
-		}
-		h.signalHub.HandleSignal(userID, &sigMsg, func(targetUserID string, data []byte) {
-			h.hub.SendToUser(targetUserID, data)
-		})
+    case "call-request", "call-accept", "call-reject", "call-end",
+        "call-join", "call-leave",
+        "offer", "answer", "ice-candidate":
+        var sigMsg webrtc.SignalMessage
+        if err := json.Unmarshal(raw, &sigMsg); err != nil {
+            return
+        }
+        h.signalHub.HandleSignal(userID, &sigMsg, func(targetUserID string, data []byte) {
+            h.hub.SendToUser(targetUserID, data)
+        })
 	}
 }
 

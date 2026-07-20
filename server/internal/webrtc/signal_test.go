@@ -185,3 +185,214 @@ func TestSignalRelay(t *testing.T) {
 		t.Error("expected answer relayed to user-1")
 	}
 }
+
+func TestConferenceCallInvite(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-1",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2", "user-3"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-001",
+		Payload: payload,
+	}, sendTo)
+
+	if _, ok := sent["user-2"]; !ok {
+		t.Error("expected call-invite sent to user-2")
+	}
+	if _, ok := sent["user-3"]; !ok {
+		t.Error("expected call-invite sent to user-3")
+	}
+
+	hub.mu.RLock()
+	call, ok := hub.calls["conf-001"]
+	hub.mu.RUnlock()
+
+	if !ok {
+		t.Fatal("expected call to exist")
+	}
+	if len(call.Participants) != 3 {
+		t.Errorf("expected 3 participants, got %d", len(call.Participants))
+	}
+}
+
+func TestConferenceCallJoin(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-1",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-002",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-3", &SignalMessage{
+		Type:   SignalCallJoin,
+		CallID: "conf-002",
+	}, sendTo)
+
+	hub.mu.RLock()
+	call, ok := hub.calls["conf-002"]
+	hub.mu.RUnlock()
+
+	if !ok {
+		t.Fatal("expected call to exist")
+	}
+	if len(call.Participants) != 3 {
+		t.Errorf("expected 3 participants after join, got %d", len(call.Participants))
+	}
+
+	if msgs, ok := sent["user-1"]; !ok || len(msgs) == 0 {
+		t.Error("expected participant-joined sent to user-1")
+	}
+	if msgs, ok := sent["user-2"]; !ok || len(msgs) == 0 {
+		t.Error("expected participant-joined sent to user-2")
+	}
+}
+
+func TestConferenceCallLeave(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-1",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2", "user-3"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-003",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-003",
+	}, sendTo)
+
+	hub.mu.RLock()
+	call, ok := hub.calls["conf-003"]
+	hub.mu.RUnlock()
+
+	if !ok {
+		t.Fatal("expected call to still exist")
+	}
+	if len(call.Participants) != 2 {
+		t.Errorf("expected 2 participants after leave, got %d", len(call.Participants))
+	}
+	if call.hasParticipant("user-2") {
+		t.Error("user-2 should not be a participant after leaving")
+	}
+}
+
+func TestConferenceCallLeaveLastRemovesCall(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "audio",
+		ChatID:       "chat-group-2",
+		FromName:     "Bob",
+		Participants: []string{"user-1", "user-2"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-004",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-004",
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-004",
+	}, sendTo)
+
+	hub.mu.RLock()
+	_, exists := hub.calls["conf-004"]
+	hub.mu.RUnlock()
+
+	if exists {
+		t.Error("expected call to be removed when all participants leave")
+	}
+}
+
+func TestConferenceRelay(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-1",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2", "user-3"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-005",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalOffer,
+		CallID:  "conf-005",
+		Payload: json.RawMessage(`{"sdp":"v=0\r\n..."}`),
+	}, sendTo)
+
+	if msgs, ok := sent["user-2"]; !ok || len(msgs) < 2 {
+		t.Error("expected offer relayed to user-2")
+	}
+	if msgs, ok := sent["user-3"]; !ok || len(msgs) < 2 {
+		t.Error("expected offer relayed to user-3")
+	}
+}

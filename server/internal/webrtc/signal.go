@@ -9,13 +9,18 @@ import (
 type SignalType string
 
 const (
-	SignalOffer       SignalType = "offer"
-	SignalAnswer      SignalType = "answer"
-	SignalICECandidate SignalType = "ice-candidate"
-	SignalCallRequest SignalType = "call-request"
-	SignalCallAccept  SignalType = "call-accept"
-	SignalCallReject  SignalType = "call-reject"
-	SignalCallEnd     SignalType = "call-end"
+	SignalOffer            SignalType = "offer"
+	SignalAnswer           SignalType = "answer"
+	SignalICECandidate     SignalType = "ice-candidate"
+	SignalCallRequest      SignalType = "call-request"
+	SignalCallAccept       SignalType = "call-accept"
+	SignalCallReject       SignalType = "call-reject"
+	SignalCallEnd          SignalType = "call-end"
+	SignalCallInvite       SignalType = "call-invite"
+	SignalCallJoin         SignalType = "call-join"
+	SignalCallLeave        SignalType = "call-leave"
+	SignalParticipantJoined SignalType = "participant-joined"
+	SignalParticipantLeft  SignalType = "participant-left"
 )
 
 type SignalMessage struct {
@@ -41,18 +46,54 @@ type ICECandidatePayload struct {
 }
 
 type CallRequestPayload struct {
+	CallType     string   `json:"call_type"`
+	ChatID       string   `json:"chat_id"`
+	FromName     string   `json:"from_name"`
+	Participants []string `json:"participants,omitempty"`
+}
+
+type CallInvitePayload struct {
 	CallType   string `json:"call_type"`
 	ChatID     string `json:"chat_id"`
 	FromName   string `json:"from_name"`
+	ChatName   string `json:"chat_name,omitempty"`
+}
+
+type ParticipantJoinedPayload struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name,omitempty"`
+}
+
+type ParticipantLeftPayload struct {
+	UserID string `json:"user_id"`
 }
 
 type Call struct {
-	ID       string
-	ChatID   string
-	CallType string
-	CallerID string
-	CalleeID string
-	Status   string
+	ID           string
+	ChatID       string
+	CallType     string
+	CallerID     string
+	CalleeID     string
+	Participants []string
+	Status       string
+}
+
+func (c *Call) hasParticipant(userID string) bool {
+	for _, id := range c.Participants {
+		if id == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Call) removeParticipant(userID string) {
+	for i, id := range c.Participants {
+		if id == userID {
+			c.Participants = append(c.Participants[:i], c.Participants[i+1:]...)
+			return
+		}
+	}
 }
 
 type SignalHub struct {
@@ -78,8 +119,12 @@ func (h *SignalHub) HandleSignal(fromUserID string, msg *SignalMessage, sendTo f
 		h.handleCallReject(msg, sendTo)
 	case SignalCallEnd:
 		h.handleCallEnd(msg, sendTo)
+	case SignalCallJoin:
+		h.handleCallJoin(fromUserID, msg, sendTo)
+	case SignalCallLeave:
+		h.handleCallLeave(fromUserID, msg, sendTo)
 	case SignalOffer, SignalAnswer, SignalICECandidate:
-		h.handleRelay(msg, sendTo)
+		h.handleRelay(fromUserID, msg, sendTo)
 	}
 }
 
@@ -91,18 +136,53 @@ func (h *SignalHub) handleCallRequest(callerID string, msg *SignalMessage, sendT
 	}
 
 	h.mu.Lock()
-	h.calls[msg.CallID] = &Call{
-		ID:       msg.CallID,
-		ChatID:   payload.ChatID,
-		CallType: payload.CallType,
-		CallerID: callerID,
-		CalleeID: msg.ToUser,
-		Status:   "ringing",
-	}
-	h.mu.Unlock()
+	if payload.Participants != nil && len(payload.Participants) > 0 {
+		participants := []string{callerID}
+		for _, p := range payload.Participants {
+			if p != callerID {
+				participants = append(participants, p)
+			}
+		}
+		h.calls[msg.CallID] = &Call{
+			ID:           msg.CallID,
+			ChatID:       payload.ChatID,
+			CallType:     payload.CallType,
+			CallerID:     callerID,
+			Participants: participants,
+			Status:       "ringing",
+		}
+		h.mu.Unlock()
 
-	data, _ := json.Marshal(msg)
-	sendTo(msg.ToUser, data)
+		invitePayload, _ := json.Marshal(CallInvitePayload{
+			CallType: payload.CallType,
+			ChatID:   payload.ChatID,
+			FromName: payload.FromName,
+		})
+		inviteMsg, _ := json.Marshal(SignalMessage{
+			Type:     SignalCallInvite,
+			CallID:   msg.CallID,
+			FromUser: callerID,
+			Payload:  invitePayload,
+		})
+		for _, p := range payload.Participants {
+			if p != callerID {
+				sendTo(p, inviteMsg)
+			}
+		}
+	} else {
+		h.calls[msg.CallID] = &Call{
+			ID:       msg.CallID,
+			ChatID:   payload.ChatID,
+			CallType: payload.CallType,
+			CallerID: callerID,
+			CalleeID: msg.ToUser,
+			Status:   "ringing",
+		}
+		h.mu.Unlock()
+
+		data, _ := json.Marshal(msg)
+		sendTo(msg.ToUser, data)
+	}
 }
 
 func (h *SignalHub) handleCallAccept(msg *SignalMessage, sendTo func(string, []byte)) {
@@ -132,14 +212,115 @@ func (h *SignalHub) handleCallEnd(msg *SignalMessage, sendTo func(string, []byte
 	h.mu.Lock()
 	if call, ok := h.calls[msg.CallID]; ok {
 		data, _ := json.Marshal(msg)
-		sendTo(call.CallerID, data)
-		sendTo(call.CalleeID, data)
+		if call.CalleeID != "" {
+			sendTo(call.CallerID, data)
+			sendTo(call.CalleeID, data)
+		} else {
+			for _, p := range call.Participants {
+				sendTo(p, data)
+			}
+		}
 		delete(h.calls, msg.CallID)
 	}
 	h.mu.Unlock()
 }
 
-func (h *SignalHub) handleRelay(msg *SignalMessage, sendTo func(string, []byte)) {
+func (h *SignalHub) handleCallJoin(userID string, msg *SignalMessage, sendTo func(string, []byte)) {
+	h.mu.Lock()
+	call, ok := h.calls[msg.CallID]
+	if !ok {
+		h.mu.Unlock()
+		return
+	}
+
+	if call.hasParticipant(userID) {
+		h.mu.Unlock()
+		return
+	}
+	call.Participants = append(call.Participants, userID)
+
+	existingParticipants := make([]string, len(call.Participants)-1)
+	copy(existingParticipants, call.Participants[:len(call.Participants)-1])
+	h.mu.Unlock()
+
+	for _, p := range existingParticipants {
+		joinedPayload, _ := json.Marshal(ParticipantJoinedPayload{
+			UserID: userID,
+		})
+		joinedMsg, _ := json.Marshal(SignalMessage{
+			Type:     SignalParticipantJoined,
+			CallID:   msg.CallID,
+			FromUser: userID,
+			ToUser:   p,
+			Payload:  joinedPayload,
+		})
+		sendTo(p, joinedMsg)
+	}
+
+	participantsPayload, _ := json.Marshal(map[string]interface{}{
+		"participants": existingParticipants,
+	})
+	participantsMsg, _ := json.Marshal(SignalMessage{
+		Type:     SignalCallJoin,
+		CallID:   msg.CallID,
+		FromUser: userID,
+		ToUser:   userID,
+		Payload:  participantsPayload,
+	})
+	sendTo(userID, participantsMsg)
+}
+
+func (h *SignalHub) handleCallLeave(userID string, msg *SignalMessage, sendTo func(string, []byte)) {
+	h.mu.Lock()
+	call, ok := h.calls[msg.CallID]
+	if !ok {
+		h.mu.Unlock()
+		return
+	}
+
+	call.removeParticipant(userID)
+	isEmpty := len(call.Participants) == 0
+	if isEmpty {
+		delete(h.calls, msg.CallID)
+	}
+	h.mu.Unlock()
+
+	leftPayload, _ := json.Marshal(ParticipantLeftPayload{
+		UserID: userID,
+	})
+	leftMsg, _ := json.Marshal(SignalMessage{
+		Type:     SignalParticipantLeft,
+		CallID:   msg.CallID,
+		FromUser: userID,
+		Payload:  leftPayload,
+	})
+
+	h.mu.RLock()
+	if call, ok := h.calls[msg.CallID]; ok {
+		for _, p := range call.Participants {
+			sendTo(p, leftMsg)
+		}
+	}
+	h.mu.RUnlock()
+}
+
+func (h *SignalHub) handleRelay(fromUserID string, msg *SignalMessage, sendTo func(string, []byte)) {
 	data, _ := json.Marshal(msg)
-	sendTo(msg.ToUser, data)
+
+	h.mu.RLock()
+	call, ok := h.calls[msg.CallID]
+	if ok && call.CalleeID == "" && len(call.Participants) > 0 {
+		for _, p := range call.Participants {
+			if p != fromUserID {
+				sendTo(p, data)
+			}
+		}
+		h.mu.RUnlock()
+		return
+	}
+	h.mu.RUnlock()
+
+	if msg.ToUser != "" {
+		sendTo(msg.ToUser, data)
+	}
 }

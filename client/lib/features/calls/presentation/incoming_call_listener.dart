@@ -41,13 +41,20 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
     final navigator = navKey.currentState;
     if (navigator == null) return;
 
+    final title = event.isGroup
+        ? 'Group ${event.callType} call'
+        : 'Incoming ${event.callType} call';
+    final from = event.isGroup
+        ? '${event.fromName} is calling in ${event.chatName ?? 'group'}'
+        : '${event.fromName} is calling...';
+
     navigator.push<void>(
       DialogRoute(
         context: navigator.context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: Text('Incoming ${event.callType} call'),
-          content: Text('${event.fromName} is calling...'),
+          title: Text(title),
+          content: Text(from),
           actions: [
             FilledButton(
               onPressed: () {
@@ -60,6 +67,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
                       remoteUserName: event.fromName,
                       callType: event.callType,
                       isIncoming: true,
+                      isGroup: event.isGroup,
                     ),
                   ),
                 );

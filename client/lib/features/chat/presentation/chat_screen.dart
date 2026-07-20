@@ -106,11 +106,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               icon: const Icon(Icons.call_outlined),
               onPressed: () => _startCall('audio'),
             ),
-          if (currentChat.type != 'personal')
+          if (currentChat.type != 'personal') ...[
+            IconButton(
+              icon: const Icon(Icons.videocam_outlined),
+              onPressed: () => _startGroupCall('video'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.call_outlined),
+              onPressed: () => _startGroupCall('audio'),
+            ),
             IconButton(
               icon: const Icon(Icons.info_outline),
               onPressed: () => context.go('/chats/${widget.chatId}/info'),
             ),
+          ],
         ],
       ),
       body: Column(
@@ -286,6 +295,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to start call: $e')),
+        );
+      }
+    }
+  }
+
+  void _startGroupCall(String callType) async {
+    final authState = ref.read(authProvider);
+    final currentUserId = authState.user?.id ?? '';
+    final userName = authState.user?.username ?? 'User';
+
+    final members = await ref.read(chatRepositoryProvider).getMembers(widget.chatId);
+    final participantIds = <String>[];
+    for (final m in members) {
+      final uid = m['user_id'] as String? ?? '';
+      if (uid.isNotEmpty && uid != currentUserId) {
+        participantIds.add(uid);
+      }
+    }
+
+    if (participantIds.isEmpty) return;
+
+    final webrtc = ref.read(webRTCServiceProvider);
+    webrtc.init();
+
+    final chatState = ref.read(chatProvider);
+    final currentChat = chatState.chats.firstWhere(
+      (c) => c.id == widget.chatId,
+      orElse: () => chatState.chats.first,
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          callType: callType,
+          isGroup: true,
+          remoteUserName: currentChat.name,
+        ),
+      ),
+    );
+
+    try {
+      await webrtc.startGroupCall(
+        callType,
+        widget.chatId,
+        participants: participantIds,
+        fromName: userName,
+      );
+    } catch (e) {
+      debugPrint('startGroupCall failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start group call: $e')),
         );
       }
     }
