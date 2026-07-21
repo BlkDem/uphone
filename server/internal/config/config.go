@@ -12,6 +12,7 @@ type Config struct {
 	UploadDir      string
 	UploadBaseURL  string
 	GoogleClientID string
+	FCMCredentials string
 }
 
 type DBConfig struct {
@@ -36,6 +37,7 @@ func Load() *Config {
 		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
 		UploadBaseURL:  getEnv("UPLOAD_BASE_URL", ""),
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+		FCMCredentials: getEnv("FCM_CREDENTIALS", ""),
 	}
 }
 

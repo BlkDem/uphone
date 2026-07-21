@@ -7,7 +7,9 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/uphone/server/internal/fcm"
 	"github.com/uphone/server/internal/middleware"
+	"github.com/uphone/server/internal/users"
 	"github.com/uphone/server/internal/webrtc"
 )
 
@@ -23,10 +25,12 @@ type Handler struct {
 	repo      *Repository
 	hub       *Hub
 	signalHub *webrtc.SignalHub
+	fcm       *fcm.Service
+	userRepo  *users.Repository
 }
 
-func NewHandler(repo *Repository, hub *Hub, signalHub *webrtc.SignalHub) *Handler {
-	return &Handler{repo: repo, hub: hub, signalHub: signalHub}
+func NewHandler(repo *Repository, hub *Hub, signalHub *webrtc.SignalHub, fcm *fcm.Service, userRepo *users.Repository) *Handler {
+	return &Handler{repo: repo, hub: hub, signalHub: signalHub, fcm: fcm, userRepo: userRepo}
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +116,20 @@ func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMes
         }
         h.signalHub.HandleSignal(userID, &sigMsg, func(targetUserID string, data []byte) {
             h.hub.SendToUser(targetUserID, data)
+            // Always send FCM push for incoming calls (for lock screen / background)
+            if sigMsg.Type == "call-request" || sigMsg.Type == "call-invite" {
+                var payload webrtc.CallRequestPayload
+                if err := json.Unmarshal(sigMsg.Payload, &payload); err == nil {
+                    h.fcm.SendCallNotification(context.Background(), h.repo.db, targetUserID, &fcm.CallNotification{
+                        CallID:   sigMsg.CallID,
+                        FromUser: userID,
+                        FromName: payload.FromName,
+                        CallType: payload.CallType,
+                        IsGroup:  len(payload.Participants) > 0,
+                        ChatName: "",
+                    })
+                }
+            }
         })
 	}
 }
@@ -153,4 +171,30 @@ func (h *Handler) handleSendMessage(ctx context.Context, senderID, chatID, conte
 		Type:    "message.new",
 		Payload: msg,
 	})
+
+	// Send FCM push to offline members
+	senderName := ""
+	if sender != nil {
+		senderName = sender.DisplayName
+		if senderName == "" {
+			senderName = sender.Username
+		}
+	}
+	chatName := ""
+	if chat, err := h.repo.GetByID(ctx, chatID); err == nil {
+		chatName = chat.Name
+	}
+	for _, uid := range userIDs {
+		if uid == senderID {
+			continue
+		}
+		if !h.hub.IsOnline(uid) {
+			h.fcm.SendMessageNotification(ctx, h.repo.db, uid, &fcm.MessageNotification{
+				SenderName: senderName,
+				ChatName:   chatName,
+				Content:    content,
+				ChatID:     chatID,
+			})
+		}
+	}
 }

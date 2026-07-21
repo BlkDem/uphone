@@ -213,11 +213,17 @@ func (h *SignalHub) handleCallEnd(msg *SignalMessage, sendTo func(string, []byte
 	if call, ok := h.calls[msg.CallID]; ok {
 		data, _ := json.Marshal(msg)
 		if call.CalleeID != "" {
-			sendTo(call.CallerID, data)
-			sendTo(call.CalleeID, data)
+			if call.CallerID != msg.FromUser {
+				sendTo(call.CallerID, data)
+			}
+			if call.CalleeID != msg.FromUser {
+				sendTo(call.CalleeID, data)
+			}
 		} else {
 			for _, p := range call.Participants {
-				sendTo(p, data)
+				if p != msg.FromUser {
+					sendTo(p, data)
+				}
 			}
 		}
 		delete(h.calls, msg.CallID)

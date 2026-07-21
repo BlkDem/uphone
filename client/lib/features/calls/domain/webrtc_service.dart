@@ -12,6 +12,7 @@ class WebRTCService {
   MediaStream? _localStream;
   String? _currentCallId;
   bool _isInCall = false;
+  bool _isAccepted = false;
   String? _chatId;
   bool _isGroupCall = false;
 
@@ -231,6 +232,8 @@ class WebRTCService {
 
   Future<void> acceptCall(String callId, String fromUserId,
       {String callType = 'video', bool isGroup = false}) async {
+    if (_isAccepted) return;
+
     _currentCallId = callId;
     _isGroupCall = isGroup;
 
@@ -242,6 +245,7 @@ class WebRTCService {
       rethrow;
     }
 
+    _isAccepted = true;
     _isInCall = true;
 
     if (!isGroup) {
@@ -291,7 +295,9 @@ class WebRTCService {
         });
       }
     }
+    final callId = _currentCallId ?? '';
     _cleanup();
+    _callEventController.add(CallEndedEvent(callId: callId));
   }
 
   void _handleJoinConference(String callId, List<String> existingParticipants) {
@@ -482,6 +488,7 @@ class WebRTCService {
 
   void _cleanup() {
     _isInCall = false;
+    _isAccepted = false;
     _isGroupCall = false;
     for (final pc in _peerConnections.values) {
       pc.close();

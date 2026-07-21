@@ -133,15 +133,6 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           break;
       }
     });
-
-    if (widget.isIncoming && widget.callId != null && widget.remoteUserId != null) {
-      webrtc.acceptCall(
-        widget.callId!,
-        widget.remoteUserId!,
-        callType: widget.callType,
-        isGroup: widget.isGroup,
-      );
-    }
   }
 
   @override

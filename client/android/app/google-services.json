@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1009967684459",
+    "project_id": "uphone-messenger",
+    "storage_bucket": "uphone-messenger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1009967684459:android:95a21a15526810d1624a2e",
+        "android_client_info": {
+          "package_name": "com.uphone.uphone_client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhy4GeDCl95Gk2yupndBOIfXeQscyKR9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1009967684459:android:4f4cea17ef815d90624a2e",
+        "android_client_info": {
+          "package_name": "ru.blkdem.uphone_messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhy4GeDCl95Gk2yupndBOIfXeQscyKR9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
