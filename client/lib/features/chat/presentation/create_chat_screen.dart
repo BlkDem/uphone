@@ -15,6 +15,8 @@ class _CreateChatScreenState extends ConsumerState<CreateChatScreen> {
   final _nameController = TextEditingController();
   String _chatType = 'group';
   final List<String> _selectedUsers = [];
+  final Map<String, String> _userNames = {};
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void dispose() {
@@ -25,6 +27,7 @@ class _CreateChatScreenState extends ConsumerState<CreateChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text(_chatType == 'group' ? 'New Group' : 'New Channel'),
         actions: [
@@ -85,16 +88,35 @@ class _CreateChatScreenState extends ConsumerState<CreateChatScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          if (_selectedUsers.isNotEmpty)
+            SizedBox(
+              height: 50,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: _selectedUsers.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final userId = _selectedUsers[index];
+                  final name = _userNames[userId];
+                  return InputChip(
+                    label: Text(name ?? userId.substring(0, userId.length.clamp(0, 8))),
+                    onDeleted: () => setState(() => _selectedUsers.remove(userId)),
+                  );
+                },
+              ),
+            ),
           Expanded(
             child: _UserSearchList(
               selectedUsers: _selectedUsers,
-              onToggle: (userId) {
+              onToggle: (userId, displayName) {
                 setState(() {
                   if (_selectedUsers.contains(userId)) {
                     _selectedUsers.remove(userId);
+                    _userNames.remove(userId);
                   } else {
                     _selectedUsers.add(userId);
+                    _userNames[userId] = displayName;
                   }
                 });
               },
@@ -107,23 +129,36 @@ class _CreateChatScreenState extends ConsumerState<CreateChatScreen> {
 
   void _create() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a group name')),
+      );
+      return;
+    }
 
-    await ref.read(chatProvider.notifier).createGroupChat(
-          name: name,
-          type: _chatType,
-          members: _selectedUsers,
+    try {
+      await ref.read(chatProvider.notifier).createGroupChat(
+            name: name,
+            type: _chatType,
+            members: _selectedUsers,
+          );
+
+      if (mounted) {
+        context.go('/chats');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create: $e')),
         );
-
-    if (mounted) {
-      context.go('/chats');
+      }
     }
   }
 }
 
 class _UserSearchList extends ConsumerStatefulWidget {
   final List<String> selectedUsers;
-  final Function(String) onToggle;
+  final Function(String userId, String displayName) onToggle;
 
   const _UserSearchList({
     required this.selectedUsers,
@@ -200,9 +235,9 @@ class _UserSearchListState extends ConsumerState<_UserSearchList> {
                 subtitle: Text(user['email'] ?? ''),
                 trailing: Checkbox(
                   value: isSelected,
-                  onChanged: (_) => widget.onToggle(userId),
+                  onChanged: (_) => widget.onToggle(userId, user['display_name'] ?? user['username'] ?? userId),
                 ),
-                onTap: () => widget.onToggle(userId),
+                onTap: () => widget.onToggle(userId, user['display_name'] ?? user['username'] ?? userId),
               );
             },
           ),
