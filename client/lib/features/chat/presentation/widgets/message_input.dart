@@ -233,78 +233,125 @@ class _MessageInputState extends State<MessageInput> {
               ),
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: Icon(
-                  _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions_outlined,
-                ),
-                onPressed: () {
-                  setState(() => _showEmojiPicker = !_showEmojiPicker);
-                  if (_showEmojiPicker) {
-                    _focusNode.unfocus();
-                  } else {
-                    _focusNode.requestFocus();
-                  }
-                },
-                color: _showEmojiPicker
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-                tooltip: 'Emoji',
+              Row(
+                children: [
+                  _ActionCircle(
+                    icon: _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions_outlined,
+                    active: _showEmojiPicker,
+                    activeColor: colorScheme.primary,
+                    onTap: () {
+                      setState(() => _showEmojiPicker = !_showEmojiPicker);
+                      if (_showEmojiPicker) {
+                        _focusNode.unfocus();
+                      } else {
+                        _focusNode.requestFocus();
+                      }
+                    },
+                    tooltip: 'Emoji',
+                  ),
+                  const SizedBox(width: 6),
+                  _ActionCircle(
+                    icon: Icons.image_outlined,
+                    onTap: _isUploading ? null : _pickImage,
+                    tooltip: 'Image',
+                  ),
+                  const SizedBox(width: 6),
+                  _ActionCircle(
+                    icon: Icons.videocam_outlined,
+                    onTap: _isUploading ? null : _pickVideo,
+                    tooltip: 'Video',
+                  ),
+                  const SizedBox(width: 6),
+                  _ActionCircle(
+                    icon: Icons.attach_file,
+                    onTap: _isUploading ? null : _pickFile,
+                    tooltip: 'Attach file',
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.image_outlined),
-                onPressed: _isUploading ? null : _pickImage,
-                color: colorScheme.onSurfaceVariant,
-                tooltip: 'Image',
-              ),
-              IconButton(
-                icon: const Icon(Icons.videocam_outlined),
-                onPressed: _isUploading ? null : _pickVideo,
-                color: colorScheme.onSurfaceVariant,
-                tooltip: 'Video',
-              ),
-              IconButton(
-                icon: const Icon(Icons.attach_file),
-                onPressed: _isUploading ? null : _pickFile,
-                color: colorScheme.onSurfaceVariant,
-                tooltip: 'Attach file',
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  maxLines: 5,
-                  minLines: 1,
-                  textInputAction: TextInputAction.newline,
-                  onChanged: _onTextChanged,
-                  decoration: InputDecoration(
-                    hintText: 'Message...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      maxLines: 5,
+                      minLines: 1,
+                      textInputAction: TextInputAction.newline,
+                      onChanged: _onTextChanged,
+                      decoration: InputDecoration(
+                        hintText: 'Message...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              IconButton.filled(
-                onPressed: (_controller.text.trim().isEmpty && !_isUploading)
-                    ? null
-                    : _send,
-                icon: const Icon(Icons.send, size: 20),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: (_controller.text.trim().isEmpty && !_isUploading)
+                        ? null
+                        : _send,
+                    icon: const Icon(Icons.send, size: 20),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ActionCircle extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool active;
+  final Color? activeColor;
+  final String? tooltip;
+
+  const _ActionCircle({
+    required this.icon,
+    this.onTap,
+    this.active = false,
+    this.activeColor,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = active ? (activeColor ?? colorScheme.primary) : colorScheme.onSurfaceVariant;
+
+    return Tooltip(
+      message: tooltip ?? '',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active
+                ? colorScheme.primaryContainer.withValues(alpha: 0.6)
+                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
+      ),
     );
   }
 }
