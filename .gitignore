@@ -51,6 +51,9 @@ deploy/web-build.zip
 # Uploads
 uploads/
 
+# Firebase service accounts
+*-firebase-adminsdk-*.json
+
 # Logs
 *.log
 logs/
