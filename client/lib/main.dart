@@ -1,16 +1,32 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'core/config/server_config.dart';
+import 'core/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'features/auth/domain/auth_provider.dart';
 import 'features/calls/presentation/incoming_call_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ServerConfig.instance.load();
   GoogleSignIn.instance.initialize();
-  runApp(const ProviderScope(child: UPhoneApp()));
+  try {
+    await Firebase.initializeApp();
+    NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Firebase init failed (notifications disabled): $e');
+  }
+
+  final container = ProviderContainer();
+  await container.read(authProvider.notifier).restoreSession();
+
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const UPhoneApp(),
+  ));
 }
 
 class UPhoneApp extends ConsumerWidget {

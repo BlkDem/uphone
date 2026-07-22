@@ -18,6 +18,7 @@ import (
 	"github.com/uphone/server/internal/chat"
 	"github.com/uphone/server/internal/contacts"
 	"github.com/uphone/server/internal/config"
+	"github.com/uphone/server/internal/fcm"
 	"github.com/uphone/server/internal/infrastructure/database"
 	"github.com/uphone/server/internal/middleware"
 	"github.com/uphone/server/internal/users"
@@ -54,8 +55,9 @@ func main() {
 	chatHub := chat.NewHub()
 	go chatHub.Run()
 	signalHub := webrtc.NewSignalHub()
+	fcmService := fcm.NewService(cfg.FCMCredentials)
 	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub)
-	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub)
+	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub, fcmService, userRepo)
 	uploadBaseURL := cfg.UploadBaseURL
 	if uploadBaseURL == "" {
 		uploadBaseURL = fmt.Sprintf("http://localhost:%d", cfg.ServerPort)
@@ -105,6 +107,7 @@ func main() {
 			api.HandleFunc("GET /users/search", authHandler.SearchUsers)
 			api.HandleFunc("GET /users/{id}", authHandler.GetUser)
 			api.HandleFunc("POST /auth/change-password", authHandler.ChangePassword)
+			api.HandleFunc("POST /users/fcm-token", authHandler.UpdateFCMToken)
 
 			api.HandleFunc("GET /admin/users", adminHandler.ListUsers)
 			api.HandleFunc("POST /admin/users", adminHandler.CreateUser)

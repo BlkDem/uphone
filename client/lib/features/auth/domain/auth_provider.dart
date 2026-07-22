@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uphone_client/core/network/api_client.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/core/config/server_config.dart';
+import 'package:uphone_client/core/notifications/notification_service.dart';
 import 'package:uphone_client/shared/models/user.dart';
 import 'package:uphone_client/features/auth/data/auth_repository.dart';
 import 'package:uphone_client/core/config/remember_me_storage.dart';
@@ -87,6 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final response = await _repository.googleSignIn(idToken);
       _apiClient.setTokens(response.accessToken, response.refreshToken);
+      NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
       state = state.copyWith(
         status: AuthStatus.authenticated,
@@ -115,6 +117,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: displayName,
       );
       _apiClient.setTokens(response.accessToken, response.refreshToken);
+      NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
       state = state.copyWith(
         status: AuthStatus.authenticated,
@@ -139,6 +142,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
       );
       _apiClient.setTokens(response.accessToken, response.refreshToken);
+      NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
       state = state.copyWith(
         status: AuthStatus.authenticated,
@@ -180,9 +184,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _repository.logout();
     } catch (_) {}
     _wsClient.disconnect();
-    _apiClient.clearTokens();
+    await _apiClient.clearTokens();
+    NotificationService.instance.clearAuth();
     await RememberMeStorage.instance.clear();
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  Future<bool> restoreSession() async {
+    final hasTokens = await _apiClient.loadPersistedTokens();
+    if (!hasTokens) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return false;
+    }
+
+    try {
+      final response = await _repository.refresh(_apiClient.refreshToken!);
+      _apiClient.setTokens(response.accessToken, response.refreshToken);
+      NotificationService.instance.setAuth(response.accessToken, response.user.id);
+      _connectWs(response.accessToken);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: response.user,
+      );
+      return true;
+    } catch (_) {
+      await _apiClient.clearTokens();
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return false;
+    }
   }
 
   String _parseError(dynamic e) {

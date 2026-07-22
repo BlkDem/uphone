@@ -293,6 +293,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (e) {
       debugPrint('startCall failed: $e');
       if (mounted) {
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to start call: $e')),
         );

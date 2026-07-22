@@ -1,15 +1,16 @@
 # UPhone
 
-Мультиплатформенный мессенджер: чаты, контакты, аудио/видео звонки (WebRTC), об файлами.
+Мультиплатформенный мессенджер: чаты, контакты, аудио/видео звонки (WebRTC, mesh P2P), об файлами, push-уведомления.
 
 ## Быстрый старт
 
 ### Требования
 
-- Go 1.24+
+- Go 1.25+
 - Flutter 3.x (stable)
 - MariaDB 11+
-- Apache2 (для прода) или直接 Go сервер (для разработки)
+- Apache2 (для прода) или напрямую Go сервер (для разработки)
+- Firebase проект (для push-уведомлений на Android)
 
 ### Локальная разработка
 
@@ -19,14 +20,29 @@ cd server
 go mod tidy
 # Запуск (предварительно создать БД и применить миграции)
 DB_HOST=127.0.0.1 DB_PORT=3307 DB_USER=uphone DB_PASSWORD=uphone_secret \
-  SERVER_PORT=8080 GOOGLE_CLIENT_ID=<your_id> go run ./cmd/server
+  SERVER_PORT=8080 GOOGLE_CLIENT_ID=<your_id> FCM_CREDENTIALS=<path/to/firebase-adminsdk.json> \
+  go run ./cmd/server
 
-# Клиент
+# Клиент (web)
 cd client
 flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
   --dart-define=WS_URL=ws://localhost:8080/ws
+
+# Клиент (Android)
+flutter run -d <device> --dart-define=API_BASE_URL=http://192.168.1.18:8080 \
+  --dart-define=WS_URL=ws://192.168.1.18:8080/ws
 ```
+
+### Firebase (push-уведомления)
+
+Для Android push-уведомлений (входящие звонки на заблокированном экране):
+
+1. Создайте Firebase проект в [Firebase Console](https://console.firebase.google.com/)
+2. Добавьте Android-приложение с package name `com.uphone.uphone_client`
+3. Скачайте `google-services.json` → `client/android/app/google-services.json`
+4. Скачайте Service Account JSON (Firebase → Settings → Service accounts → Generate new private key)
+5. Положите JSON-ключ на сервер и укажите путь в `FCM_CREDENTIALS`
 
 ### Тесты
 
@@ -58,9 +74,26 @@ sudo bash deploy/deploy.sh --domain=chat.example.com
 - Генерирует JWT секрет
 - При `--domain` — получает SSL-сертификат Let's Encrypt, настраивает HTTPS + auto-renewal
 
+### Конфигурация
+
+Конфиг: `/etc/uphone/uphone.env`
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `SERVER_PORT` | Порт сервера | `8080` |
+| `DB_HOST` | Хост MariaDB | `localhost` |
+| `DB_PORT` | Порт MariaDB | `3306` |
+| `DB_USER` | Пользователь БД | `uphone` |
+| `DB_PASSWORD` | Пароль БД | `uphone_secret` |
+| `DB_NAME` | Имя БД | `uphone` |
+| `JWT_SECRET` | Секрет JWT | `change-me-in-production` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | — |
+| `FCM_CREDENTIALS` | Путь к Firebase Service Account JSON | — |
+| `UPLOAD_DIR` | Директория файлов | `./uploads` |
+
 После запуска:
 ```bash
-# Отредактировать конфиг (Google Client ID и т.д.)
+# Отредактировать конфиг
 sudo nano /etc/uphone/uphone.env
 sudo systemctl restart uphone
 
@@ -75,8 +108,6 @@ journalctl -u uphone -f
 | WebSocket | `ws://<IP>/ws` |
 | Админка | `http://<IP>/admin` |
 | Health | `http://<IP>:8080/health` |
-
-Конфиг: `/etc/uphone/uphone.env`
 
 ### Обновление
 
@@ -117,6 +148,25 @@ sudo bash /opt/uphone/deploy/deploy.sh --skip-flutter-build
 
 Билд: ~46 MB (main.dart.js = 5.5 MB), архив ~17 MB.
 
+### Сборка Android APK
+
+```bash
+cd client
+flutter pub get
+
+# Debug APK
+flutter build apk --debug \
+  --dart-define=API_BASE_URL=http://<SERVER_IP>:8080 \
+  --dart-define=WS_URL=ws://<SERVER_IP>:8080/ws
+
+# Release APK
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://<DOMAIN> \
+  --dart-define=WS_URL=wss://<DOMAIN>/ws
+```
+
+APK: `client/build/app/outputs/flutter-apk/app-debug.apk`
+
 ## Рекомендации по железу
 
 Приватный клуб до ~10 пользователей. Минимальные требования:
@@ -136,12 +186,13 @@ sudo bash /opt/uphone/deploy/deploy.sh --skip-flutter-build
 
 ## Стек
 
-- **Сервер:** Go, chi, gorilla/websocket, Pion WebRTC
+- **Сервер:** Go, chi, gorilla/websocket, Pion WebRTC, Firebase Admin SDK
 - **Клиент:** Flutter Web (приоритет), Android
 - **БД:** MariaDB 11
 - **Файлы:** Локальная FS (`/var/lib/uphone/uploads`)
 - **Прокси:** Apache2 (reverse proxy, WebSocket, static files)
 - **Админка:** Веб-интерфейс на Go templates, встроенный в бинарник
+- **Push:** Firebase Cloud Messaging (Android)
 
 ## Структура проекта
 
@@ -149,14 +200,14 @@ sudo bash /opt/uphone/deploy/deploy.sh --skip-flutter-build
 uphone/
 ├── client/           # Flutter клиент
 │   └── lib/
-│       ├── core/     # Конфигурация, сеть, темы, роутер
+│       ├── core/     # Конфигурация, сеть, темы, роутер, уведомления
 │       ├── features/ # auth, chat, contacts, calls
 │       └── shared/   # Модели, общие виджеты
 │
 ├── server/           # Go сервер
 │   ├── cmd/server/   # Точка входа (main.go)
-│   ├── internal/     # config, auth, chat, contacts, users, webrtc, admin, middleware
-│   └── migrations/   # SQL миграции (001_init..004_admin)
+│   ├── internal/     # config, auth, chat, contacts, users, webrtc, fcm, admin, middleware
+│   └── migrations/   # SQL миграции (001_init..005_fcm_token)
 │
 ├── deploy/           # Скрипт развёртывания
 │   ├── deploy.sh     # Основной скрипт
@@ -169,6 +220,8 @@ uphone/
 
 ## API
 
+### Авторизация и пользователи
+
 | Метод | Путь | Описание |
 |-------|------|----------|
 | POST | `/api/v1/auth/register` | Регистрация |
@@ -176,9 +229,17 @@ uphone/
 | POST | `/api/v1/auth/google` | Google OAuth |
 | POST | `/api/v1/auth/refresh` | Обновление токена |
 | POST | `/api/v1/auth/logout` | Выход |
+| POST | `/api/v1/auth/change-password` | Смена пароля |
 | GET | `/api/v1/users/me` | Текущий пользователь |
 | PUT | `/api/v1/users/me` | Обновить профиль |
 | GET | `/api/v1/users/search?q=` | Поиск пользователей |
+| GET | `/api/v1/users/:id` | Получить пользователя |
+| POST | `/api/v1/users/fcm-token` | Зарегистрировать FCM токен |
+
+### Чаты и сообщения
+
+| Метод | Путь | Описание |
+|-------|------|----------|
 | POST | `/api/v1/chats` | Создать чат |
 | GET | `/api/v1/chats` | Список чатов |
 | GET | `/api/v1/chats/:id` | Информация о чате |
@@ -196,6 +257,11 @@ uphone/
 | POST | `/api/v1/chats/:id/messages/:msgId/forward` | Переслать |
 | GET | `/api/v1/chats/:id/media` | Медиа-файлы чата |
 | POST | `/api/v1/upload` | Загрузить файл |
+
+### Контакты
+
+| Метод | Путь | Описание |
+|-------|------|----------|
 | GET | `/api/v1/contacts` | Список контактов (?q=) |
 | POST | `/api/v1/contacts` | Создать контакт |
 | GET | `/api/v1/contacts/:id` | Контакт |
@@ -203,12 +269,73 @@ uphone/
 | DELETE | `/api/v1/contacts/:id` | Удалить контакт |
 | GET | `/api/v1/contacts/export?format=vcard\|csv` | Экспорт |
 | POST | `/api/v1/contacts/import?format=vcard\|csv` | Импорт |
-| GET | `/api/v1/admin/users` | Список пользователей (admin) |
-| POST | `/api/v1/admin/users` | Создать пользователя (admin) |
-| DELETE | `/api/v1/admin/users/:id` | Удалить пользователя (admin) |
-| PUT | `/api/v1/admin/users/:id/role` | Сменить роль (admin) |
-| POST | `/api/v1/admin/users/:id/password` | Сменить пароль (admin) |
-| WS | `/ws?token=` | WebSocket |
+
+### Админка
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/v1/admin/users` | Список пользователей |
+| POST | `/api/v1/admin/users` | Создать пользователя |
+| DELETE | `/api/v1/admin/users/:id` | Удалить пользователя |
+| PUT | `/api/v1/admin/users/:id/role` | Сменить роль |
+| POST | `/api/v1/admin/users/:id/password` | Сменить пароль |
+
+### WebSocket
+
+| Протокол | Путь | Описание |
+|----------|------|----------|
+| WS | `/ws?token=` | WebSocket (JSON) |
+
+#### WebSocket — типы сообщений
+
+**Чат:**
+- `message.send` → `message.new`
+- `typing.start` / `typing.stop`
+- `message.read`
+
+**Звонки (WebRTC signal):**
+- `call-request` — входящий звонок (1:1)
+- `call-invite` — приглашение в групповой звонок
+- `call-accept` / `call-reject` / `call-end`
+- `call-join` / `call-leave` — групповой звонок
+- `participant-joined` / `participant-left`
+- `offer` / `answer` / `ice-candidate` — WebRTC SDP/ICE
+
+**Присутствие:**
+- `user.online` / `user.offline`
+
+## Возможности клиента
+
+### Звонки
+- Аудио и видеозвонки 1:1 (WebRTC P2P)
+- Групповые звонки (mesh P2P, до 10 участников)
+- Видео-сетка для групповых звонок, PiP для одного удалённого участника
+- Локальное превью видео (включая Android)
+- Кнопки mute/unmute и toggle камеры
+- Скрытый `RTCVideoWeb` для воспроизведения аудио в фоне (web)
+- Push-уведомления о входящих звонках (Android, FCM)
+
+### Чаты
+- Личные и групповые чаты
+- Создание групповых чатов с выбором участников (InputChips)
+- Редактирование и удаление сообщений
+- Реакции на сообщения
+- Пересылка сообщений
+- Индикатор набора текста
+
+### Медиа
+- Просмотр изображений (photo_view)
+- Встроенный видеоплеер (video_player) с полноэкранным режимом и прогресс-баром
+- Встроенный аудиоплеер
+- Загрузка файлов (изображения, видео, документы)
+- Экспорт/импорт контактов (vCard, CSV)
+
+### Другое
+- Google OAuth
+- Админ-панель (web)
+- Push-уведомления (Firebase Cloud Messaging)
+- Автоподключение WebSocket с реконнектом
+- Тёмная/светлая тема
 
 ## Админ-панель
 

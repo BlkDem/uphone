@@ -269,3 +269,31 @@ func (h *Handler) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
 
 	shared.WriteJSON(w, http.StatusOK, resp)
 }
+
+func (h *Handler) UpdateFCMToken(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	if userID == "" {
+		shared.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		shared.WriteError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	if err := h.service.userRepo.UpdateFCMToken(r.Context(), userID, req.Token); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "token updated"})
+}

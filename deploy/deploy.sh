@@ -168,12 +168,23 @@ UPLOAD_DIR=${DATA_DIR}/uploads
 UPLOAD_BASE_URL=${UPLOAD_BASE_URL}
 JWT_SECRET=${JWT_SECRET}
 GOOGLE_CLIENT_ID=
+FCM_CREDENTIALS=${CONF_DIR}/firebase-service-account.json
 EOF
     chmod 600 "${CONF_DIR}/uphone.env"
     log "Config written to ${CONF_DIR}/uphone.env"
     log ">>> EDIT THIS FILE to set GOOGLE_CLIENT_ID and verify settings <<<"
 else
     warn "Config file exists at ${CONF_DIR}/uphone.env, skipping creation"
+fi
+
+# Copy Firebase service account if present in repo
+FIREBASE_JSON="${DEPLOY_DIR}/uphone-messenger-firebase-adminsdk-fbsvc-6766358e52.json"
+if [[ -f "${FIREBASE_JSON}" ]]; then
+    cp "${FIREBASE_JSON}" "${CONF_DIR}/firebase-service-account.json"
+    chmod 600 "${CONF_DIR}/firebase-service-account.json"
+    log "Firebase service account copied to ${CONF_DIR}/firebase-service-account.json"
+else
+    warn "Firebase service account not found in repo, FCM push disabled"
 fi
 
 # ---- 9. Systemd service ----

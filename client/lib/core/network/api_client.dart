@@ -1,6 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
+  static const _kRefreshToken = 'uphone_refresh_token';
+  static const _kAccessToken = 'uphone_access_token';
+
   late Dio _dio;
   String? _accessToken;
   String? _refreshToken;
@@ -38,11 +42,13 @@ class ApiClient {
   void setTokens(String accessToken, String refreshToken) {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
+    _persistTokens();
   }
 
-  void clearTokens() {
+  Future<void> clearTokens() async {
     _accessToken = null;
     _refreshToken = null;
+    await _clearPersistedTokens();
   }
 
   String? get accessToken => _accessToken;
@@ -50,6 +56,29 @@ class ApiClient {
 
   Future<void> refreshAccessToken() async {
     await _tryRefresh();
+  }
+
+  Future<bool> loadPersistedTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    _accessToken = prefs.getString(_kAccessToken);
+    _refreshToken = prefs.getString(_kRefreshToken);
+    return _accessToken != null && _refreshToken != null;
+  }
+
+  Future<void> _persistTokens() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_accessToken != null) await prefs.setString(_kAccessToken, _accessToken!);
+      if (_refreshToken != null) await prefs.setString(_kRefreshToken, _refreshToken!);
+    } catch (_) {}
+  }
+
+  Future<void> _clearPersistedTokens() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kAccessToken);
+      await prefs.remove(_kRefreshToken);
+    } catch (_) {}
   }
 
   Future<bool> _tryRefresh() async {
@@ -60,9 +89,10 @@ class ApiClient {
       final data = response.data;
       _accessToken = data['access_token'];
       _refreshToken = data['refresh_token'];
+      _persistTokens();
       return true;
     } catch (_) {
-      clearTokens();
+      await clearTokens();
       return false;
     }
   }

@@ -187,6 +187,26 @@ func (r *Repository) Delete(ctx context.Context, userID string) error {
 	return err
 }
 
+func (r *Repository) UpdateFCMToken(ctx context.Context, userID, fcmToken string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET fcm_token = ?, updated_at = ? WHERE id = ?`,
+		fcmToken, time.Now().UTC(), userID)
+	return err
+}
+
+func (r *Repository) GetFCMToken(ctx context.Context, userID string) (string, error) {
+	var token sql.NullString
+	err := r.db.QueryRowContext(ctx,
+		`SELECT fcm_token FROM users WHERE id = ?`, userID).Scan(&token)
+	if err != nil {
+		return "", err
+	}
+	if token.Valid {
+		return token.String, nil
+	}
+	return "", nil
+}
+
 func (r *Repository) ListAll(ctx context.Context) ([]User, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, username, email, '', google_id, COALESCE(display_name,''), COALESCE(avatar_url,''),

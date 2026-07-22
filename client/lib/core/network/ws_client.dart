@@ -146,4 +146,16 @@ class WsClient {
     _channel?.sink.close();
     _channel = null;
   }
+
+  bool get isConnected => _channel != null;
+
+  void reconnect() {
+    if (_token == null || _token!.isEmpty) return;
+    _reconnectAttempts = 0;
+    _shouldReconnect = true;
+    _pingTimer?.cancel();
+    _channel?.sink.close();
+    _channel = null;
+    _doConnect();
+  }
 }
