@@ -125,6 +125,7 @@ func main() {
 			api.HandleFunc("POST /chats/{id}/messages/{msgId}/react", chatAPI.AddReaction)
 			api.HandleFunc("GET /chats/{id}/media", chatAPI.GetMediaMessages)
 			api.HandleFunc("POST /chats/{id}/messages/{msgId}/forward", chatAPI.ForwardMessage)
+			api.HandleFunc("POST /chats/{id}/read", chatAPI.MarkAsRead)
 
 			api.HandleFunc("PUT /chats/{id}", chatAPI.UpdateChat)
 			api.HandleFunc("DELETE /chats/{id}", chatAPI.DeleteChat)

@@ -134,9 +134,10 @@ func (s *Service) SendMessageNotification(ctx context.Context, db *sql.DB, userI
 		Android: &messaging.AndroidConfig{
 			Priority: "normal",
 			Notification: &messaging.AndroidNotification{
-				Title:    title,
-				Body:     body,
-				ChannelID: "uphone_messages",
+				Title:      title,
+				Body:       body,
+				ChannelID:  "uphone_messages",
+				Visibility: messaging.VisibilityPublic,
 			},
 		},
 	}

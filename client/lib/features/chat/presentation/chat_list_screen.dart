@@ -186,6 +186,7 @@ class ChatTile extends StatelessWidget {
     final timeStr = lastMessage != null
         ? DateFormat('HH:mm').format(lastMessage.createdAt)
         : '';
+    final unreadCount = chat.unreadCount ?? 0;
 
     return ListTile(
       onTap: onTap,
@@ -225,14 +226,30 @@ class ChatTile extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-      trailing: lastMessage != null
-          ? Text(
-              timeStr,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+      trailing: unreadCount > 0
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$unreadCount',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             )
-          : null,
+          : lastMessage != null
+              ? Text(
+                  timeStr,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                )
+              : null,
     );
   }
 }

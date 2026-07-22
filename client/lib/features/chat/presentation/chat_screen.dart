@@ -24,6 +24,9 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   String? _editingMessageId;
+  bool _initialScrollDone = false;
+  final _firstUnreadKey = GlobalKey();
+  int? _firstUnreadIndex;
 
   @override
   void initState() {
@@ -39,16 +42,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
+  double _estimateMessageHeight(ChatMessage msg) {
+    const double overhead = 40; // padding 4 + margin 4 + container padding 20 + time 12
+    if (msg.type == 'image') return 160 + 32 + overhead; // image + buttons
+    if (msg.type == 'video') return 124 + 32 + overhead; // 16:9 + buttons
+    if (msg.type == 'file') return 60 + 32 + overhead;
+    if (msg.type == 'voice') return 48 + 32 + overhead;
+    final lines = (msg.content.length / 38).ceil().clamp(1, 20);
+    return overhead + lines * 22;
+  }
+
+  void _performInitialScroll(ChatState chatState) {
+    if (_initialScrollDone) return;
+    _initialScrollDone = true;
+
+    final currentChat = chatState.chats.firstWhere(
+      (c) => c.id == widget.chatId,
+      orElse: () => chatState.chats.isNotEmpty ? chatState.chats.first : throw Exception('Chat not found'),
+    );
+
+    if (currentChat.unreadCount <= 0 || chatState.messages.length <= 1) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    } else {
+      final unreadStart = chatState.messages.length - currentChat.unreadCount;
+      _firstUnreadIndex = unreadStart.clamp(0, chatState.messages.length - 1);
+
+      // Phase 1: rough jump to get target widget into viewport
+      double offset = 0;
+      for (int i = 0; i < _firstUnreadIndex!; i++) {
+        offset += _estimateMessageHeight(chatState.messages[i]);
       }
-    });
+      _scrollController.jumpTo(offset.clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      ));
+
+      // Phase 2: precise scroll after the target widget renders
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_firstUnreadKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            _firstUnreadKey.currentContext!,
+            alignment: 0.0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   @override
@@ -57,8 +97,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final authState = ref.watch(authProvider);
 
     ref.listen<ChatState>(chatProvider, (prev, next) {
-      if ((prev?.messages.length ?? 0) < next.messages.length) {
-        _scrollToBottom();
+      if (!_initialScrollDone && !next.isLoadingMessages && next.messages.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _performInitialScroll(next);
+          }
+        });
+      } else if ((prev?.messages.length ?? 0) < next.messages.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       }
     });
 
@@ -139,6 +193,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               chatState.messages[index - 1].senderId != msg.senderId);
 
                       return MessageBubble(
+                        key: index == _firstUnreadIndex ? _firstUnreadKey : null,
                         message: msg,
                         isMe: isMe,
                         showSender: showSender,
