@@ -6,6 +6,7 @@ import 'core/config/server_config.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'features/auth/domain/auth_provider.dart';
 import 'features/calls/presentation/incoming_call_listener.dart';
 
 void main() async {
@@ -18,7 +19,14 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase init failed (notifications disabled): $e');
   }
-  runApp(const ProviderScope(child: UPhoneApp()));
+
+  final container = ProviderContainer();
+  await container.read(authProvider.notifier).restoreSession();
+
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const UPhoneApp(),
+  ));
 }
 
 class UPhoneApp extends ConsumerWidget {

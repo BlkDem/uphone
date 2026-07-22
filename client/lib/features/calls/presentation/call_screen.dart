@@ -34,6 +34,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   bool _isMuted = false;
   bool _isVideoOff = false;
   String _callStatus = 'Connecting...';
+  bool _callEnded = false;
   StreamSubscription<MediaStream>? _localSub;
   StreamSubscription<RemoteStreamEvent>? _remoteSub;
   StreamSubscription<CallEvent>? _callEventSub;
@@ -118,14 +119,18 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           setState(() {});
           break;
         case CallRejectedEvent():
+          if (_callEnded) break;
+          _callEnded = true;
           setState(() => _callStatus = 'Call rejected');
-          Future.delayed(const Duration(seconds: 1), () {
+          Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) Navigator.of(context).pop();
           });
           break;
         case CallEndedEvent():
+          if (_callEnded) break;
+          _callEnded = true;
           setState(() => _callStatus = 'Call ended');
-          Future.delayed(const Duration(seconds: 1), () {
+          Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) Navigator.of(context).pop();
           });
           break;
@@ -149,8 +154,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   }
 
   void _endCall() {
+    if (_callEnded) return;
+    _callEnded = true;
     ref.read(webRTCServiceProvider).endCall();
-    Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _toggleMute() {

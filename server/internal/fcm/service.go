@@ -85,12 +85,6 @@ func (s *Service) SendCallNotification(ctx context.Context, db *sql.DB, userID s
 		},
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
-			Notification: &messaging.AndroidNotification{
-				Title:    title,
-				Body:     body,
-				ChannelID: "uphone_calls",
-				Sound:    "ringtone",
-			},
 		},
 	}
 

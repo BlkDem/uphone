@@ -184,10 +184,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _repository.logout();
     } catch (_) {}
     _wsClient.disconnect();
-    _apiClient.clearTokens();
+    await _apiClient.clearTokens();
     NotificationService.instance.clearAuth();
     await RememberMeStorage.instance.clear();
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  Future<bool> restoreSession() async {
+    final hasTokens = await _apiClient.loadPersistedTokens();
+    if (!hasTokens) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return false;
+    }
+
+    try {
+      final response = await _repository.refresh(_apiClient.refreshToken!);
+      _apiClient.setTokens(response.accessToken, response.refreshToken);
+      NotificationService.instance.setAuth(response.accessToken, response.user.id);
+      _connectWs(response.accessToken);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: response.user,
+      );
+      return true;
+    } catch (_) {
+      await _apiClient.clearTokens();
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return false;
+    }
   }
 
   String _parseError(dynamic e) {

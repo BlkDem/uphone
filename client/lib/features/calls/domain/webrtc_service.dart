@@ -282,21 +282,29 @@ class WebRTCService {
   }
 
   void endCall() {
-    if (_currentCallId != null) {
-      if (_isGroupCall) {
-        _wsClient.send({
-          'type': 'call-leave',
-          'call_id': _currentCallId,
-        });
-      } else {
-        _wsClient.send({
-          'type': 'call-end',
-          'call_id': _currentCallId,
-        });
-      }
-    }
     final callId = _currentCallId ?? '';
-    _cleanup();
+    try {
+      if (_currentCallId != null) {
+        if (_isGroupCall) {
+          _wsClient.send({
+            'type': 'call-leave',
+            'call_id': _currentCallId,
+          });
+        } else {
+          _wsClient.send({
+            'type': 'call-end',
+            'call_id': _currentCallId,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to send end call signal: $e');
+    }
+    try {
+      _cleanup();
+    } catch (e) {
+      debugPrint('Failed to cleanup call: $e');
+    }
     _callEventController.add(CallEndedEvent(callId: callId));
   }
 
