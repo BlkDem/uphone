@@ -80,9 +80,18 @@ func (r *Repository) GetByID(ctx context.Context, chatID string) (*Chat, error) 
 func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT c.id, c.type, COALESCE(c.name,''), COALESCE(c.description,''), COALESCE(c.avatar_url,''),
-		        COALESCE(c.created_by,''), c.created_at, c.updated_at
+		        COALESCE(c.created_by,''), c.created_at, c.updated_at,
+		        lm.id, lm.chat_id, lm.sender_id, COALESCE(lm.content,''), lm.type,
+		        COALESCE(lm.file_url,''), COALESCE(lm.reply_to,''), lm.is_pinned, lm.is_deleted,
+		        lm.created_at, lm.updated_at,
+		        lu.id, lu.username, COALESCE(lu.display_name,''), COALESCE(lu.avatar_url,'')
 		 FROM chats c
 		 INNER JOIN chat_members cm ON c.id = cm.chat_id
+		 LEFT JOIN messages lm ON lm.chat_id = c.id AND lm.id = (
+		     SELECT m2.id FROM messages m2 WHERE m2.chat_id = c.id AND m2.is_deleted = FALSE
+		     ORDER BY m2.created_at DESC LIMIT 1
+		 )
+		 LEFT JOIN users lu ON lm.sender_id = lu.id
 		 WHERE cm.user_id = ?
 		 ORDER BY c.updated_at DESC`, userID)
 	if err != nil {
@@ -94,12 +103,66 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 	for rows.Next() {
 		var c Chat
 		var chatType string
+		var lmID, lmChatID, lmSenderID, lmContent, lmType, lmFileURL, lmReplyTo sql.NullString
+		var lmIsPinned, lmIsDeleted sql.NullBool
+		var lmCreatedAt, lmUpdatedAt sql.NullTime
+		var luID, luUsername, luDisplayName, luAvatarURL sql.NullString
+
 		if err := rows.Scan(
 			&c.ID, &chatType, &c.Name, &c.Description, &c.AvatarURL,
-			&c.CreatedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			&c.CreatedBy, &c.CreatedAt, &c.UpdatedAt,
+			&lmID, &lmChatID, &lmSenderID, &lmContent, &lmType,
+			&lmFileURL, &lmReplyTo, &lmIsPinned, &lmIsDeleted,
+			&lmCreatedAt, &lmUpdatedAt,
+			&luID, &luUsername, &luDisplayName, &luAvatarURL); err != nil {
 			return nil, err
 		}
 		c.Type = ChatType(chatType)
+
+		if lmID.Valid {
+			msg := &Message{
+				ID:       lmID.String,
+				ChatID:   lmChatID.String,
+				SenderID: lmSenderID.String,
+				Content:  lmContent.String,
+				Type:     lmType.String,
+				FileURL:  lmFileURL.String,
+				ReplyTo:  lmReplyTo.String,
+				Sender: &Sender{
+					ID:          luID.String,
+					Username:    luUsername.String,
+					DisplayName: luDisplayName.String,
+					AvatarURL:   luAvatarURL.String,
+				},
+			}
+			if lmIsPinned.Valid {
+				msg.IsPinned = lmIsPinned.Bool
+			}
+			if lmIsDeleted.Valid {
+				msg.IsDeleted = lmIsDeleted.Bool
+			}
+			if lmCreatedAt.Valid {
+				msg.CreatedAt = lmCreatedAt.Time
+			}
+			if lmUpdatedAt.Valid {
+				msg.UpdatedAt = lmUpdatedAt.Time
+			}
+			c.LastMessage = msg
+		}
+
+		// Compute unread count for this chat
+		var unreadCount int
+		err = r.db.QueryRowContext(ctx,
+			`SELECT COUNT(*)
+			 FROM messages m
+			 INNER JOIN chat_members cm ON m.chat_id = cm.chat_id
+			 WHERE m.chat_id = ? AND cm.user_id = ? AND m.sender_id != ?
+			   AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
+			   AND m.is_deleted = FALSE`, c.ID, userID, userID).Scan(&unreadCount)
+		if err == nil {
+			c.UnreadCount = unreadCount
+		}
+
 		chats = append(chats, c)
 	}
 	return chats, nil
@@ -438,6 +501,64 @@ func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, mediaT
 		messages = append(messages, msg)
 	}
 	return messages, nil
+}
+
+func (r *Repository) MarkAsRead(ctx context.Context, chatID, userID, messageID string) error {
+	msgTime, err := r.getMessageTime(ctx, messageID)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`INSERT INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, ?)
+		 ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)`,
+		messageID, userID, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("insert message_read: %w", err)
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`UPDATE chat_members SET last_read_at = GREATEST(COALESCE(last_read_at, ?), ?)
+		 WHERE chat_id = ? AND user_id = ?`,
+		msgTime, msgTime, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("update last_read_at: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) getMessageTime(ctx context.Context, msgID string) (time.Time, error) {
+	var t time.Time
+	err := r.db.QueryRowContext(ctx, `SELECT created_at FROM messages WHERE id = ?`, msgID).Scan(&t)
+	return t, err
+}
+
+func (r *Repository) GetUnreadCount(ctx context.Context, chatID, userID string) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*)
+		 FROM messages m
+		 INNER JOIN chat_members cm ON m.chat_id = cm.chat_id
+		 WHERE m.chat_id = ? AND cm.user_id = ? AND m.sender_id != ?
+		   AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
+		   AND m.is_deleted = FALSE`, chatID, userID, userID).Scan(&count)
+	return count, err
+}
+
+func (r *Repository) GetLastReadMessageID(ctx context.Context, chatID, userID string) (string, error) {
+	var msgID string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT m.id
+		 FROM messages m
+		 INNER JOIN chat_members cm ON m.chat_id = cm.chat_id
+		 WHERE m.chat_id = ? AND cm.user_id = ?
+		   AND m.created_at <= COALESCE(cm.last_read_at, '1970-01-01')
+		 ORDER BY m.created_at DESC LIMIT 1`, chatID, userID).Scan(&msgID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return msgID, err
 }
 
 func (r *Repository) ForwardMessage(ctx context.Context, targetChatID string, msg *Message) error {

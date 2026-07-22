@@ -474,6 +474,50 @@ func (h *APIHandler) DeleteChat(w http.ResponseWriter, r *http.Request) {
 	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "chat deleted"})
 }
 
+func (h *APIHandler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	chatID := r.PathValue("id")
+
+	isMember, err := h.repo.IsMember(r.Context(), chatID, userID)
+	if err != nil || !isMember {
+		shared.WriteError(w, http.StatusForbidden, "not a member")
+		return
+	}
+
+	var req struct {
+		MessageID string `json:"message_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.repo.MarkAsRead(r.Context(), chatID, userID, req.MessageID); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to mark as read")
+		return
+	}
+
+	// Broadcast read receipt to other members
+	members, err := h.repo.GetMembers(r.Context(), chatID)
+	if err == nil {
+		for _, m := range members {
+			if m.UserID != userID {
+				h.hub.SendToUser(m.UserID, mustMarshal(&Envelope{
+					Type:    "message.read",
+					Payload: map[string]string{"chatId": chatID, "userId": userID, "messageId": req.MessageID},
+				}))
+			}
+		}
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func mustMarshal(v interface{}) []byte {
+	data, _ := json.Marshal(v)
+	return data
+}
+
 func (h *APIHandler) GetMediaMessages(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r)
 	chatID := r.PathValue("id")

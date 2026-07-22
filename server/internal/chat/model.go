@@ -21,6 +21,7 @@ type Chat struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	Members     []Member  `json:"members,omitempty"`
 	LastMessage *Message  `json:"last_message,omitempty"`
+	UnreadCount int       `json:"unread_count"`
 }
 
 type Member struct {
