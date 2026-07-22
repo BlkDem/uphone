@@ -1,5 +1,6 @@
 package com.uphone.uphone_client
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -11,12 +12,19 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+
+    companion object {
+        @Volatile
+        var isInForeground = false
+            private set
+    }
 
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
@@ -37,6 +45,29 @@ class MainActivity : FlutterActivity() {
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
+        }
+    }
+
+    private fun dismissKeyguard() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                keyguardManager.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() {}
+                    override fun onDismissCancelled() {}
+                    override fun onDismissError() {}
+                })
+            }
+        }
+    }
+
+    private fun checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
         }
     }
 
@@ -67,11 +98,32 @@ class MainActivity : FlutterActivity() {
                 }
                 "cancelCallNotification" -> {
                     CallNotificationService.cancelCallNotification(this)
+                    CallOverlayService.stop(this)
                     result.success(null)
                 }
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.uphone/ws_service")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startWsService" -> {
+                        val wsUrl = call.argument<String>("wsUrl") ?: ""
+                        val token = call.argument<String>("token") ?: ""
+                        WsKeepAliveService.start(this, wsUrl, token)
+                        result.success(true)
+                    }
+                    "stopWsService" -> {
+                        WsKeepAliveService.stop(this)
+                        result.success(true)
+                    }
+                    "readWsDebugLog" -> {
+                        result.success(WsKeepAliveService.readDebugLog(this))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
 
         pendingCallData?.let { data ->
             callChannel?.invokeMethod("onCallIntent", data)
@@ -83,7 +135,9 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (isCallIntent(intent)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             showOverLockScreen()
+            dismissKeyguard()
         }
         handleIntent(intent)
     }
@@ -91,6 +145,7 @@ class MainActivity : FlutterActivity() {
     private fun handleIntent(intent: Intent) {
         val callAction = intent.getStringExtra("call_action") ?: return
         CallNotificationService.cancelCallNotification(this)
+        WsKeepAliveService.cancelCallNotification(this)
         val data = mapOf(
             "call_action" to callAction,
             "call_id" to (intent.getStringExtra("call_id") ?: ""),
@@ -110,9 +165,21 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (isCallIntent(intent)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             showOverLockScreen()
+            dismissKeyguard()
         }
         handleIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isInForeground = false
     }
 
     @Suppress("DEPRECATION")

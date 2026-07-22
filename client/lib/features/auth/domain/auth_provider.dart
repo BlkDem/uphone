@@ -8,6 +8,7 @@ import 'package:uphone_client/core/notifications/notification_service.dart';
 import 'package:uphone_client/shared/models/user.dart';
 import 'package:uphone_client/features/auth/data/auth_repository.dart';
 import 'package:uphone_client/core/config/remember_me_storage.dart';
+import 'package:uphone_client/core/network/ws_service_bridge.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading }
 
@@ -177,6 +178,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return _apiClient.accessToken;
       },
     );
+    _wsClient.onTokenRefreshed = (newToken) {
+      print('[WsBridge] Token refreshed, updating native service');
+      WsServiceBridge.start(ServerConfig.instance.wsUrl, newToken);
+    };
+    WsServiceBridge.start(ServerConfig.instance.wsUrl, accessToken);
   }
 
   Future<void> logout() async {
@@ -184,6 +190,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _repository.logout();
     } catch (_) {}
     _wsClient.disconnect();
+    WsServiceBridge.stop();
     await _apiClient.clearTokens();
     NotificationService.instance.clearAuth();
     await RememberMeStorage.instance.clear();

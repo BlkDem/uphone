@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 typedef WSMessageHandler = void Function(Map<String, dynamic> message);
 typedef TokenProvider = Future<String?> Function();
+typedef TokenRefreshedCallback = void Function(String newToken);
 
 class WsClient {
   WebSocketChannel? _channel;
@@ -20,6 +21,11 @@ class WsClient {
   WSMessageHandler? _onConnect;
   WSMessageHandler? _onDisconnect;
   TokenProvider? _tokenProvider;
+  TokenRefreshedCallback? _onTokenRefreshed;
+
+  set onTokenRefreshed(TokenRefreshedCallback? callback) {
+    _onTokenRefreshed = callback;
+  }
 
   set onMessage(WSMessageHandler? handler) {
     if (handler != null) {
@@ -63,6 +69,7 @@ class WsClient {
     if (freshToken != null && freshToken.isNotEmpty && freshToken != _token) {
       _token = freshToken;
       _reconnectAttempts = 0;
+      _onTokenRefreshed?.call(freshToken);
     }
   }
 

@@ -118,6 +118,7 @@ class _IncomingCallListenerState
     _pendingIsGroup = action.isGroup;
 
     _isShowingIncomingCall = true;
+    NotificationService.showOverLockScreen();
     final route = MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => IncomingCallScreen(
@@ -131,7 +132,6 @@ class _IncomingCallListenerState
     navigator.push<void>(route).then((_) {
       _isShowingIncomingCall = false;
     });
-    NotificationService.showOverLockScreen();
   }
 
   void _acceptFromNotification(NotificationAction action) {
@@ -165,6 +165,7 @@ class _IncomingCallListenerState
     _pendingIsGroup = event.isGroup;
 
     _isShowingIncomingCall = true;
+    NotificationService.showOverLockScreen();
     final route = MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => IncomingCallScreen(
@@ -179,7 +180,6 @@ class _IncomingCallListenerState
     navigator.push<void>(route).then((_) {
       _isShowingIncomingCall = false;
     });
-    NotificationService.showOverLockScreen();
   }
 
   void _closeIncomingCallScreen() {

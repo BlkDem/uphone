@@ -40,6 +40,7 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.google.firebase:firebase-messaging-ktx:24.1.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 kotlin {
