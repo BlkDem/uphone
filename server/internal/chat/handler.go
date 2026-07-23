@@ -30,7 +30,13 @@ type Handler struct {
 }
 
 func NewHandler(repo *Repository, hub *Hub, signalHub *webrtc.SignalHub, fcm *fcm.Service, userRepo *users.Repository) *Handler {
-	return &Handler{repo: repo, hub: hub, signalHub: signalHub, fcm: fcm, userRepo: userRepo}
+	h := &Handler{repo: repo, hub: hub, signalHub: signalHub, fcm: fcm, userRepo: userRepo}
+
+	signalHub.OnMissedCall = func(info *webrtc.MissedCallInfo) {
+		h.handleMissedCall(info)
+	}
+
+	return h
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -216,4 +222,76 @@ func (h *Handler) handleSendMessage(ctx context.Context, senderID, chatID, conte
 			})
 		}
 	}
+}
+
+func (h *Handler) handleMissedCall(info *webrtc.MissedCallInfo) {
+	ctx := context.Background()
+
+	calleeIDs := info.Callees
+	if len(calleeIDs) == 0 {
+		return
+	}
+
+	callerName := info.CallerName
+	if callerName == "" {
+		if sender, err := h.repo.getSenderInfo(ctx, info.CallerID); err == nil {
+			callerName = sender.DisplayName
+			if callerName == "" {
+				callerName = sender.Username
+			}
+		} else {
+			callerName = "Кто-то"
+		}
+	}
+
+	callTypeLabel := "звонок"
+	if info.CallType == "video" {
+		callTypeLabel = "видеозвонок"
+	}
+
+	for _, calleeID := range calleeIDs {
+		h.fcm.SendMissedCallNotification(ctx, h.repo.db, calleeID, &fcm.MissedCallNotification{
+			CallID:     info.CallID,
+			CallerID:   info.CallerID,
+			CallerName: callerName,
+			CallType:   info.CallType,
+			ChatID:     info.ChatID,
+		})
+
+		if !h.hub.IsOnline(calleeID) {
+			continue
+		}
+
+		h.hub.SendToUser(calleeID, mustMarshal(&Envelope{
+			Type: "missed_call",
+			Payload: map[string]string{
+				"call_id":    info.CallID,
+				"caller_id":  info.CallerID,
+				"caller_name": callerName,
+				"call_type":  info.CallType,
+				"chat_id":    info.ChatID,
+			},
+		}))
+	}
+
+	content := "Пропущенный " + callTypeLabel + " от " + callerName
+	sysMsg, err := h.repo.SendSystemMessage(ctx, info.ChatID, content)
+	if err != nil {
+		log.Printf("missed call system message error: %v", err)
+		return
+	}
+
+	members, err := h.repo.GetMembers(ctx, info.ChatID)
+	if err == nil {
+		userIDs := make([]string, len(members))
+		for i, m := range members {
+			userIDs[i] = m.UserID
+		}
+		h.hub.BroadcastToUsers(userIDs, &Envelope{
+			Type:    "message.new",
+			Payload: sysMsg,
+		})
+	}
+
+	_ = h.repo.SaveCallLog(ctx, info.CallID, info.ChatID, info.CallerID, "", info.CallType, "missed", info.StartedAt)
 }

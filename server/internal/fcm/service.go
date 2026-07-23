@@ -149,3 +149,61 @@ func (s *Service) SendMessageNotification(ctx context.Context, db *sql.DB, userI
 		log.Printf("FCM: sent message notification to %s", userID)
 	}
 }
+
+type MissedCallNotification struct {
+	CallID     string
+	CallerID   string
+	CallerName string
+	CallType   string
+	ChatID     string
+}
+
+func (s *Service) SendMissedCallNotification(ctx context.Context, db *sql.DB, userID string, notif *MissedCallNotification) {
+	if s.client == nil {
+		return
+	}
+
+	var token string
+	err := db.QueryRowContext(ctx, `SELECT fcm_token FROM users WHERE id = ?`, userID).Scan(&token)
+	if err != nil || token == "" {
+		return
+	}
+
+	callTypeLabel := "звонок"
+	if notif.CallType == "video" {
+		callTypeLabel = "видеозвонок"
+	}
+
+	title := "Пропущенный " + callTypeLabel
+	body := notif.CallerName + " пытался(-ась) дозвониться"
+
+	msg := &messaging.Message{
+		Token: token,
+		Data: map[string]string{
+			"type":      "missed_call",
+			"call_id":   notif.CallID,
+			"caller_id": notif.CallerID,
+			"caller_name": notif.CallerName,
+			"call_type": notif.CallType,
+			"chat_id":   notif.ChatID,
+			"title":     title,
+			"body":      body,
+		},
+		Android: &messaging.AndroidConfig{
+			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				Title:     title,
+				Body:      body,
+				ChannelID: "uphone_calls",
+				Visibility: messaging.VisibilityPublic,
+			},
+		},
+	}
+
+	_, err = s.client.Send(ctx, msg)
+	if err != nil {
+		log.Printf("FCM: failed to send missed call to %s: %v", userID, err)
+	} else {
+		log.Printf("FCM: sent missed call notification to %s", userID)
+	}
+}

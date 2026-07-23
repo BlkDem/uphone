@@ -78,6 +78,15 @@ class NotificationService {
               enableVibration: true,
             ),
           );
+          await androidPlugin.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'uphone_calls',
+              'Calls',
+              description: 'UPhone call notifications',
+              importance: Importance.high,
+              enableVibration: true,
+            ),
+          );
         }
       }
 
@@ -149,6 +158,25 @@ class NotificationService {
         callType: callType,
         isGroup: isGroup,
       ));
+    } else if (type == 'missed_call') {
+      final callId = data['call_id'] ?? '';
+      final callerId = data['caller_id'] ?? '';
+      final callerName = data['caller_name'] ?? 'Кто-то';
+      final callType = data['call_type'] ?? 'video';
+      final chatId = data['chat_id'] ?? '';
+      final title = data['title'] ?? 'Пропущенный звонок';
+      final body = data['body'] ?? '$callerName пытался(-ась) дозвониться';
+
+      _actionController.add(NotificationAction(
+        action: 'MISSED_CALL',
+        callId: callId,
+        fromUserId: callerId,
+        fromName: callerName,
+        callType: callType,
+        chatId: chatId,
+      ));
+
+      _showMissedCallNotification(title, body);
     } else {
       // Regular message notification
       final title = data['title'] ?? message.notification?.title ?? 'UPhone';
@@ -175,6 +203,21 @@ class NotificationService {
         fromName: fromName,
         callType: callType,
         isGroup: isGroup,
+      ));
+    } else if (type == 'missed_call') {
+      final callId = data['call_id'] ?? '';
+      final callerId = data['caller_id'] ?? '';
+      final callerName = data['caller_name'] ?? 'Кто-то';
+      final callType = data['call_type'] ?? 'video';
+      final chatId = data['chat_id'] ?? '';
+
+      _actionController.add(NotificationAction(
+        action: 'MISSED_CALL',
+        callId: callId,
+        fromUserId: callerId,
+        fromName: callerName,
+        callType: callType,
+        chatId: chatId,
       ));
     }
   }
@@ -262,6 +305,23 @@ class NotificationService {
     );
   }
 
+  Future<void> _showMissedCallNotification(String title, String body) async {
+    const androidDetails = AndroidNotificationDetails(
+      'uphone_calls',
+      'Calls',
+      channelDescription: 'UPhone call notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: androidDetails);
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      details,
+    );
+  }
+
   Future<void> _registerToken(String token) async {
     if (_accessToken == null || _userId == null) return;
 
@@ -292,6 +352,7 @@ class NotificationAction {
   final String? fromName;
   final String callType;
   final bool isGroup;
+  final String? chatId;
 
   const NotificationAction({
     required this.action,
@@ -300,5 +361,6 @@ class NotificationAction {
     this.fromName,
     this.callType = 'video',
     this.isGroup = false,
+    this.chatId,
   });
 }

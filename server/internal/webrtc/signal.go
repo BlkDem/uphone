@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 )
 
 type SignalType string
@@ -68,14 +69,27 @@ type ParticipantLeftPayload struct {
 	UserID string `json:"user_id"`
 }
 
+type MissedCallInfo struct {
+	CallID     string
+	ChatID     string
+	CallerID   string
+	CallerName string
+	CallType   string
+	Callees    []string
+	StartedAt  time.Time
+}
+
 type Call struct {
 	ID           string
 	ChatID       string
 	CallType     string
 	CallerID     string
+	CallerName   string
 	CalleeID     string
 	Participants []string
 	Status       string
+	StartedAt    time.Time
+	cancel       chan struct{}
 }
 
 func (c *Call) hasParticipant(userID string) bool {
@@ -97,13 +111,62 @@ func (c *Call) removeParticipant(userID string) {
 }
 
 type SignalHub struct {
-	calls map[string]*Call
-	mu    sync.RWMutex
+	calls         map[string]*Call
+	mu            sync.RWMutex
+	OnMissedCall  func(info *MissedCallInfo)
 }
 
 func NewSignalHub() *SignalHub {
 	return &SignalHub{
 		calls: make(map[string]*Call),
+	}
+}
+
+const missedCallTimeout = 30 * time.Second
+
+func (h *SignalHub) startCallTimeout(callID string) {
+	call := &Call{}
+	h.mu.RLock()
+	if c, ok := h.calls[callID]; ok {
+		*call = *c
+	}
+	h.mu.RUnlock()
+
+	if call.cancel == nil {
+		return
+	}
+
+	timer := time.NewTimer(missedCallTimeout)
+	select {
+	case <-timer.C:
+		h.mu.Lock()
+		c, ok := h.calls[callID]
+		if ok && c.Status == "ringing" {
+			delete(h.calls, callID)
+			h.mu.Unlock()
+
+			if h.OnMissedCall != nil {
+				callees := []string{}
+				if c.CalleeID != "" {
+					callees = []string{c.CalleeID}
+				} else {
+					callees = c.Participants
+				}
+				h.OnMissedCall(&MissedCallInfo{
+					CallID:     callID,
+					ChatID:     c.ChatID,
+					CallerID:   c.CallerID,
+					CallerName: c.CallerName,
+					CallType:   c.CallType,
+					Callees:    callees,
+					StartedAt:  c.StartedAt,
+				})
+			}
+		} else {
+			h.mu.Unlock()
+		}
+	case <-call.cancel:
+		timer.Stop()
 	}
 }
 
@@ -143,15 +206,21 @@ func (h *SignalHub) handleCallRequest(callerID string, msg *SignalMessage, sendT
 				participants = append(participants, p)
 			}
 		}
+		cancel := make(chan struct{})
 		h.calls[msg.CallID] = &Call{
 			ID:           msg.CallID,
 			ChatID:       payload.ChatID,
 			CallType:     payload.CallType,
 			CallerID:     callerID,
+			CallerName:   payload.FromName,
 			Participants: participants,
 			Status:       "ringing",
+			StartedAt:    time.Now().UTC(),
+			cancel:       cancel,
 		}
 		h.mu.Unlock()
+
+		go h.startCallTimeout(msg.CallID)
 
 		invitePayload, _ := json.Marshal(CallInvitePayload{
 			CallType: payload.CallType,
@@ -170,15 +239,21 @@ func (h *SignalHub) handleCallRequest(callerID string, msg *SignalMessage, sendT
 			}
 		}
 	} else {
+		cancel := make(chan struct{})
 		h.calls[msg.CallID] = &Call{
-			ID:       msg.CallID,
-			ChatID:   payload.ChatID,
-			CallType: payload.CallType,
-			CallerID: callerID,
-			CalleeID: msg.ToUser,
-			Status:   "ringing",
+			ID:         msg.CallID,
+			ChatID:     payload.ChatID,
+			CallType:   payload.CallType,
+			CallerID:   callerID,
+			CallerName: payload.FromName,
+			CalleeID:   msg.ToUser,
+			Status:     "ringing",
+			StartedAt:  time.Now().UTC(),
+			cancel:     cancel,
 		}
 		h.mu.Unlock()
+
+		go h.startCallTimeout(msg.CallID)
 
 		data, _ := json.Marshal(msg)
 		sendTo(msg.ToUser, data)
@@ -189,6 +264,10 @@ func (h *SignalHub) handleCallAccept(msg *SignalMessage, sendTo func(string, []b
 	h.mu.Lock()
 	if call, ok := h.calls[msg.CallID]; ok {
 		call.Status = "active"
+		if call.cancel != nil {
+			close(call.cancel)
+			call.cancel = nil
+		}
 	}
 	h.mu.Unlock()
 
@@ -200,6 +279,10 @@ func (h *SignalHub) handleCallReject(msg *SignalMessage, sendTo func(string, []b
 	h.mu.Lock()
 	if call, ok := h.calls[msg.CallID]; ok {
 		call.Status = "rejected"
+		if call.cancel != nil {
+			close(call.cancel)
+			call.cancel = nil
+		}
 		delete(h.calls, msg.CallID)
 	}
 	h.mu.Unlock()
@@ -211,6 +294,12 @@ func (h *SignalHub) handleCallReject(msg *SignalMessage, sendTo func(string, []b
 func (h *SignalHub) handleCallEnd(msg *SignalMessage, sendTo func(string, []byte)) {
 	h.mu.Lock()
 	if call, ok := h.calls[msg.CallID]; ok {
+		wasRinging := call.Status == "ringing"
+		if call.cancel != nil {
+			close(call.cancel)
+			call.cancel = nil
+		}
+
 		data, _ := json.Marshal(msg)
 		if call.CalleeID != "" {
 			if call.CallerID != msg.FromUser {
@@ -224,6 +313,26 @@ func (h *SignalHub) handleCallEnd(msg *SignalMessage, sendTo func(string, []byte
 				if p != msg.FromUser {
 					sendTo(p, data)
 				}
+			}
+		}
+
+		if wasRinging {
+			callees := []string{}
+			if call.CalleeID != "" {
+				callees = []string{call.CalleeID}
+			} else {
+				callees = call.Participants
+			}
+			if h.OnMissedCall != nil {
+				h.OnMissedCall(&MissedCallInfo{
+					CallID:     msg.CallID,
+					ChatID:     call.ChatID,
+					CallerID:   call.CallerID,
+					CallerName: call.CallerName,
+					CallType:   call.CallType,
+					Callees:    callees,
+					StartedAt:  call.StartedAt,
+				})
 			}
 		}
 		delete(h.calls, msg.CallID)

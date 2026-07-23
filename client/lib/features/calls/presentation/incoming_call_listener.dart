@@ -106,6 +106,8 @@ class _IncomingCallListenerState
         _closeIncomingCallScreen();
         NotificationService.cancelCallNotification(callId: action.callId);
         _clearPending();
+      } else if (action.action == 'MISSED_CALL') {
+        _handleMissedCall(action);
       }
     });
   }
@@ -218,6 +220,15 @@ class _IncomingCallListenerState
     _pendingRemoteUserName = null;
     _pendingCallType = null;
     _pendingIsGroup = false;
+  }
+
+  void _handleMissedCall(NotificationAction action) {
+    final chatId = action.chatId;
+    if (chatId != null && chatId.isNotEmpty) {
+      final navKey = ref.read(navigatorKeyProvider);
+      final router = ref.read(routerProvider);
+      router.go('/chats/$chatId', extra: navKey);
+    }
   }
 
   void _pushCallScreen({
