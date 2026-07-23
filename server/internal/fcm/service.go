@@ -22,7 +22,8 @@ func NewService(credentialsFile string) *Service {
 
 	if credentialsFile != "" {
 		opt := option.WithCredentialsFile(credentialsFile)
-		app, err = firebase.NewApp(ctx, nil, opt)
+		config := &firebase.Config{ProjectID: "uphone-messenger"}
+		app, err = firebase.NewApp(ctx, config, opt)
 	} else {
 		app, err = firebase.NewApp(ctx, nil)
 	}
