@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
+import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 
 class ChatListScreen extends ConsumerStatefulWidget {
   const ChatListScreen({super.key});
@@ -23,6 +24,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
     final authState = ref.watch(authProvider);
+    final contactsState = ref.watch(contactsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -118,6 +120,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     return ChatTile(
                       chat: chat,
                       currentUserId: authState.user?.id ?? '',
+                      contacts: contactsState.contacts,
                       onTap: () {
                         ref.read(chatProvider.notifier).openChat(chat.id);
                         context.go('/chats/${chat.id}');
@@ -181,12 +184,14 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 class ChatTile extends StatelessWidget {
   final dynamic chat;
   final String currentUserId;
+  final List<dynamic> contacts;
   final VoidCallback onTap;
 
   const ChatTile({
     super.key,
     required this.chat,
     required this.currentUserId,
+    this.contacts = const [],
     required this.onTap,
   });
 
@@ -198,15 +203,31 @@ class ChatTile extends StatelessWidget {
         : '';
     final unreadCount = chat.unreadCount ?? 0;
 
+    String? contactAvatar;
+    if (chat.type == 'personal' && chat.avatarUrl.isEmpty) {
+      for (final c in contacts) {
+        if (c.displayName == chat.name &&
+            c.avatarUrl != null &&
+            c.avatarUrl!.isNotEmpty) {
+          contactAvatar = c.avatarUrl;
+          break;
+        }
+      }
+    }
+
+    final displayAvatar = chat.avatarUrl.isNotEmpty
+        ? chat.avatarUrl
+        : contactAvatar;
+
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        backgroundImage: chat.avatarUrl.isNotEmpty
-            ? NetworkImage(chat.avatarUrl)
+        backgroundImage: displayAvatar != null && displayAvatar.isNotEmpty
+            ? NetworkImage(displayAvatar)
             : null,
-        child: chat.avatarUrl.isEmpty
+        child: (displayAvatar == null || displayAvatar.isEmpty)
             ? Text(
                 chat.name.isNotEmpty
                     ? chat.name[0].toUpperCase()
