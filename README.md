@@ -1,6 +1,6 @@
 # UPhone
 
-Мультиплатформенный мессенджер: чаты, контакты, аудио/видео звонки (WebRTC, mesh P2P), об файлами, push-уведомления.
+Мультиплатформенный мессенджер: чаты, контакты, аудио/видео звонки (WebRTC, mesh P2P), обмен файлами, push-уведомления, пропущенные звонки, настройки чатов (аватар, переименование).
 
 ## Быстрый старт
 
@@ -11,8 +11,28 @@
 - MariaDB 11+
 - Apache2 (для прода) или напрямую Go сервер (для разработки)
 - Firebase проект (для push-уведомлений на Android)
+- Docker + Docker Compose (для локальной разработки)
 
 ### Локальная разработка
+
+#### Docker (рекомендуется)
+
+```bash
+cd docker
+docker compose up -d        # запуск server + MariaDB + MinIO
+# Сервер: http://localhost:8080
+# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+```
+
+Клиент:
+```bash
+cd client
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
+  --dart-define=WS_URL=ws://localhost:8080/ws
+```
+
+#### Без Docker
 
 ```bash
 # Сервер
@@ -67,12 +87,13 @@ sudo bash deploy/deploy.sh --domain=chat.example.com
 ```
 
 Скрипт автоматически:
-- Устанавливает Go, Flutter, MariaDB, Apache2
+- Устанавливает Go, Flutter, MariaDB, Apache2, MinIO (объектное хранилище)
 - Создаёт базу данных и пользователя
 - Собирает Go сервер и Flutter web-клиент
 - Настраивает systemd сервис и Apache2 (reverse proxy + WebSocket)
 - Генерирует JWT секрет
 - При `--domain` — получает SSL-сертификат Let's Encrypt, настраивает HTTPS + auto-renewal
+- MinIO включён по умолчанию (отключить: `USE_MINIO=false`)
 
 ### Конфигурация
 
@@ -89,7 +110,13 @@ sudo bash deploy/deploy.sh --domain=chat.example.com
 | `JWT_SECRET` | Секрет JWT | `change-me-in-production` |
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID | — |
 | `FCM_CREDENTIALS` | Путь к Firebase Service Account JSON | — |
-| `UPLOAD_DIR` | Директория файлов | `./uploads` |
+| `UPLOAD_DIR` | Директория файлов (фолбэк) | `./uploads` |
+| `UPLOAD_BASE_URL` | Базовый URL для файлов | `http://localhost:{port}` |
+| `MINIO_ENDPOINT` | MinIO/S3 адрес (включает S3-хранилище) | — |
+| `MINIO_ACCESS_KEY` | MinIO access key | — |
+| `MINIO_SECRET_KEY` | MinIO secret key | — |
+| `MINIO_BUCKET` | Имя бакета | `uphone-uploads` |
+| `MINIO_USE_SSL` | SSL для MinIO | `false` |
 
 После запуска:
 ```bash
@@ -108,6 +135,7 @@ journalctl -u uphone -f
 | WebSocket | `ws://<IP>/ws` |
 | Админка | `http://<IP>/admin` |
 | Health | `http://<IP>:8080/health` |
+| MinIO Console | `http://<IP>:9001` (Docker/прод) |
 
 ### Обновление
 
@@ -178,7 +206,7 @@ APK: `client/build/app/outputs/flutter-apk/app-debug.apk`
 | **Сеть** | 100 Mbps, статический IP |
 | **Домен** | Не обязателен, можно по IP |
 
-Хватит самого дешёвого VPS (Hetzner CX22, Timeweb Cloud 1vCPU/1G, Yandex Cloud standard-v1). Go-сервер и MariaDB весят ~50 MB RAM в простое. Flutter web-клиент — статика ~20-50 MB на диске, раздача Apache2 почти ничего не ест.
+Хватит самого дешёвого VPS (Hetzner CX22, Timeweb Cloud 1vCPU/1G, Yandex Cloud standard-v1). Go-сервер и MariaDB весят ~50 MB RAM в простое. MinIO добавляет ~100 MB RAM. Flutter web-клиент — статика ~20-50 MB на диске, раздача Apache2 почти ничего не ест.
 
 **Билд Flutter web** требует ~2-4 GB RAM. Рекомендуется билдить локально и копировать `build/web/` на сервер (`scp -r` или через CI). Если билдить на сервере — ставить swap 2 GB или брать VPS с 2+ GB RAM.
 
@@ -189,10 +217,11 @@ APK: `client/build/app/outputs/flutter-apk/app-debug.apk`
 - **Сервер:** Go, chi, gorilla/websocket, Pion WebRTC, Firebase Admin SDK
 - **Клиент:** Flutter Web (приоритет), Android
 - **БД:** MariaDB 11
-- **Файлы:** Локальная FS (`/var/lib/uphone/uploads`)
+- **Файлы:** MinIO/S3 (Docker) или локальная FS (фолбэк)
 - **Прокси:** Apache2 (reverse proxy, WebSocket, static files)
 - **Админка:** Веб-интерфейс на Go templates, встроенный в бинарник
 - **Push:** Firebase Cloud Messaging (Android)
+- **Деплой:** Docker Compose (локально) или bare-metal скрипт (прод)
 
 ## Структура проекта
 
@@ -206,11 +235,15 @@ uphone/
 │
 ├── server/           # Go сервер
 │   ├── cmd/server/   # Точка входа (main.go)
-│   ├── internal/     # config, auth, chat, contacts, users, webrtc, fcm, admin, middleware
-│   └── migrations/   # SQL миграции (001_init..005_fcm_token)
+│   ├── internal/     # config, auth, chat, contacts, users, webrtc, fcm, admin, middleware, storage
+│   └── migrations/   # SQL миграции (001_init..007_call_logs)
 │
-├── deploy/           # Скрипт развёртывания
-│   ├── deploy.sh     # Основной скрипт
+├── docker/           # Docker Compose (server + MariaDB + MinIO)
+│   ├── docker-compose.yml
+│   └── Dockerfile.server
+│
+├── deploy/           # Скрипт развёртывания (bare-metal Ubuntu/Debian)
+│   ├── deploy.sh
 │   ├── uphone.env.example
 │   ├── uphone.service
 │   └── uphone.conf
@@ -256,6 +289,7 @@ uphone/
 | POST | `/api/v1/chats/:id/messages/:msgId/react` | Реакция |
 | POST | `/api/v1/chats/:id/messages/:msgId/forward` | Переслать |
 | GET | `/api/v1/chats/:id/media` | Медиа-файлы чата |
+| POST | `/api/v1/chats/:id/read` | Отметить как прочитанное |
 | POST | `/api/v1/upload` | Загрузить файл |
 
 ### Контакты
@@ -300,6 +334,7 @@ uphone/
 - `call-join` / `call-leave` — групповой звонок
 - `participant-joined` / `participant-left`
 - `offer` / `answer` / `ice-candidate` — WebRTC SDP/ICE
+- `missed_call` — пропущенный звонок (system message + call_log + FCM push)
 
 **Присутствие:**
 - `user.online` / `user.offline`
@@ -314,14 +349,19 @@ uphone/
 - Кнопки mute/unmute и toggle камеры
 - Скрытый `RTCVideoWeb` для воспроизведения аудио в фоне (web)
 - Push-уведомления о входящих звонках (Android, FCM)
+- Пропущенные звонки: 30с таймаут → system message + call_log + FCM push
 
 ### Чаты
-- Личные и групповые чаты
+- Личные и групповые чаты, каналы
 - Создание групповых чатов с выбором участников (InputChips)
+- Настройки чата: аватар, переименование (все типы чатов)
+- Управление участниками: добавление/удаление (owner/admin), роль-based UI
 - Редактирование и удаление сообщений
 - Реакции на сообщения
 - Пересылка сообщений
 - Индикатор набора текста
+- Счётчик непрочитанных, автопрокрутка к первому непрочитанному
+- Системные сообщения (пропущенные звонки, приглашения)
 
 ### Медиа
 - Просмотр изображений (photo_view)
@@ -336,6 +376,7 @@ uphone/
 - Push-уведомления (Firebase Cloud Messaging)
 - Автоподключение WebSocket с реконнектом
 - Тёмная/светлая тема
+- Хранение файлов: MinIO/S3 (Docker) или локальная FS
 
 ## Админ-панель
 

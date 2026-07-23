@@ -21,6 +21,7 @@ import (
 	"github.com/uphone/server/internal/fcm"
 	"github.com/uphone/server/internal/infrastructure/database"
 	"github.com/uphone/server/internal/middleware"
+	"github.com/uphone/server/internal/storage"
 	"github.com/uphone/server/internal/users"
 	"github.com/uphone/server/internal/webrtc"
 )
@@ -62,7 +63,22 @@ func main() {
 	if uploadBaseURL == "" {
 		uploadBaseURL = fmt.Sprintf("http://localhost:%d", cfg.ServerPort)
 	}
-	uploadHandler := chat.NewUploadHandler(absUploadDir, uploadBaseURL)
+
+	var uploadHandler *chat.UploadHandler
+	if cfg.MinIOEndpoint != "" {
+		s3Storage, err := storage.NewS3Storage(cfg)
+		if err != nil {
+			log.Printf("warning: failed to init S3 storage: %v, falling back to local filesystem", err)
+		} else {
+			uploadHandler = chat.NewUploadHandler(s3Storage, uploadBaseURL)
+			log.Println("Storage: using S3/MinIO")
+		}
+	}
+	if uploadHandler == nil {
+		localStorage := storage.NewLocalStorage(absUploadDir)
+		uploadHandler = chat.NewUploadHandler(localStorage, uploadBaseURL)
+		log.Printf("Storage: using local filesystem at %s", absUploadDir)
+	}
 
 	contactsRepo := contacts.NewRepository(db)
 	contactsHandler := contacts.NewHandler(contactsRepo)
@@ -148,12 +164,12 @@ func main() {
 	})
 
 	r.Get("/uploads/*", func(w http.ResponseWriter, r *http.Request) {
-		filePath := filepath.Join(absUploadDir, filepath.Base(r.URL.Path))
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		filename := filepath.Base(r.URL.Path)
+		if filename == "" || filename == "/" {
 			http.NotFound(w, r)
 			return
 		}
-		http.ServeFile(w, r, filePath)
+		storage.ServeFile(w, r, uploadHandler.Storage(), filename)
 	})
 
 	r.Route("/admin", func(adminRouter chi.Router) {

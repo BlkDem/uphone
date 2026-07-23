@@ -119,7 +119,7 @@ func (h *APIHandler) GetChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chat, err := h.repo.GetByID(r.Context(), chatID)
+	chat, err := h.repo.GetByIDForUser(r.Context(), chatID, userID)
 	if err != nil {
 		shared.WriteError(w, http.StatusNotFound, "chat not found")
 		return
@@ -305,21 +305,24 @@ func (h *APIHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
 	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")
 
-	role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
-	if err != nil || (role != "owner" && role != "admin") {
-		shared.WriteError(w, http.StatusForbidden, "not authorized")
+	chat, err := h.repo.GetByID(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusNotFound, "chat not found")
 		return
+	}
+
+	// Personal chats: any member can update. Group/Channel: owner/admin only.
+	if chat.Type != ChatTypePersonal {
+		role, err := h.repo.GetMemberRole(r.Context(), chatID, userID)
+		if err != nil || (role != "owner" && role != "admin") {
+			shared.WriteError(w, http.StatusForbidden, "not authorized")
+			return
+		}
 	}
 
 	var req UpdateChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	chat, err := h.repo.GetByID(r.Context(), chatID)
-	if err != nil {
-		shared.WriteError(w, http.StatusNotFound, "chat not found")
 		return
 	}
 

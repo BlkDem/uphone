@@ -34,7 +34,7 @@
 ├─────────────────────────────────────────┤
 │          Infrastructure Layer           │
 ├──────────────┬──────────────────────────┤
-│   MariaDB   │  Локальная FS (файлы)   │
+│   MariaDB   │  MinIO/S3 (файлы)         │
 └──────────────┴──────────────────────────┘
 ```
 
@@ -48,7 +48,7 @@
 | WebSocket | gorilla/websocket | Зрелая библиотека |
 | WebRTC | Сигналинг через WS | P2P для 1:1 |
 | БД | MariaDB 11 | ACID, JSON, full-text, MySQL-совместимость |
-| Файлы | Локальная FS | ~10 пользователей |
+| Файлы | MinIO/S3 (Docker) или локальная FS | S3-совместимое хранилище |
 | Авторизация | JWT (access + refresh) | Stateless |
 | Пароли | bcrypt | Стандарт безопасности |
 | Google OAuth | google_sign_in + server verification | SSO |
@@ -70,7 +70,6 @@
 |-----------|-----------------|
 | Redis | ~10 пользователей, in-memory в Go |
 | NATS | WebSocket hub напрямую |
-| MinIO | Локальная ФС |
 | Микросервисы | Один бинарник |
 | SFU | P2P для 1:1 |
 | Rate Limiting | ~10 пользователей |
@@ -106,18 +105,26 @@ uphone/
 │   │   ├── contacts/                # Контакты (CRUD, vCard, CSV)
 │   │   ├── users/                   # Пользователи
 │   │   ├── webrtc/                  # WebRTC сигналинг
+│   │   ├── fcm/                     # Firebase Cloud Messaging
+│   │   ├── admin/                   # Админ-панель
+│   │   ├── storage/                 # S3/MinIO + LocalStorage
 │   │   └── middleware/              # Auth, CORS
 │   ├── migrations/                  # SQL миграции
 │   │   ├── 001_init.sql
 │   │   ├── 002_google_oauth.sql
-│   │   └── 003_contacts.sql
+│   │   ├── 003_contacts.sql
+│   │   └── 004..007_fcm_token, call_logs
 │   └── go.mod
 │
 ├── deploy/                          # Развёртывание
-│   ├── deploy.sh                    # Основной скрипт
+│   ├── deploy.sh                    # Основной скрипт (bare-metal)
 │   ├── uphone.env.example           # Шаблон конфига
 │   ├── uphone.service               # Systemd unit
 │   └── uphone.conf                  # Apache2 vhost
+│
+├── docker/                          # Docker Compose (локальная разработка)
+│   ├── docker-compose.yml           # server + MariaDB + MinIO
+│   └── Dockerfile.server
 │
 └── ARCHITECTURE.md
 ```
@@ -167,6 +174,7 @@ DELETE /api/v1/chats/:id/messages/:msgId       # Удалить
 POST   /api/v1/chats/:id/messages/:msgId/react # Реакция
 POST   /api/v1/chats/:id/messages/:msgId/forward # Переслать
 GET    /api/v1/chats/:id/media                 # Медиа-файлы чата
+POST   /api/v1/chats/:id/read                  # Отметить как прочитанное
 ```
 
 ### Contacts
@@ -196,6 +204,8 @@ WS     /ws?token=                   # Real-time соединение
 {"type": "call-request", "call_id": "...", "to_user": "...", "payload": {"call_type": "video"}}
 {"type": "call-accept", "call_id": "..."}
 {"type": "call-reject", "call_id": "..."}
+{"type": "call-end", "call_id": "..."}
+{"type": "missed_call", "call_id": "...", "chat_id": "...", "from_user": "...", "call_type": "audio|video"}
 ```
 
 ### Сервер → Клиент
@@ -212,9 +222,9 @@ WS     /ws?token=                   # Real-time соединение
 
 ## Database Schema (MariaDB)
 
-Таблицы: `users`, `chats`, `chat_members`, `messages`, `reactions`, `contacts`
+Таблицы: `users`, `chats`, `chat_members`, `messages`, `reactions`, `contacts`, `call_logs`, `message_reads`, `fcm_tokens`
 
-Миграции: `server/migrations/001_init.sql`, `002_google_oauth.sql`, `003_contacts.sql`
+Миграции: `server/migrations/001_init.sql` .. `007_call_logs.sql`
 
 Схема применяется автоматически при старте сервера (idempotent, `IF NOT EXISTS`).
 
@@ -234,3 +244,8 @@ WS     /ws?token=                   # Real-time соединение
 | 10 | Контакты (CRUD, vCard/CSV импорт/экспорт) | Готово |
 | 11 | Remember Me (сохранение логина) | Готово |
 | 12 | Боевое развёртывание (deploy script) | Готово |
+| 13 | Push-уведомления (FCM, входящие звонки) | Готово |
+| 14 | Пропущенные звонки (30с таймаут, call_logs, system message) | Готово |
+| 15 | Настройки чатов (аватар, переименование, управление участниками) | Готово |
+| 16 | MinIO/S3 хранилище (Docker + bare-metal) | Готово |
+| 17 | Счётчик непрочитанных, автопрокрутка | Готово |

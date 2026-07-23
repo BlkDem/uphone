@@ -29,6 +29,10 @@ class _CreateChatScreenState extends ConsumerState<CreateChatScreen> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(_chatType == 'group' ? 'New Group' : 'New Channel'),
         actions: [
           TextButton(

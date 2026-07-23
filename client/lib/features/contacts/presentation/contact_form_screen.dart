@@ -44,6 +44,10 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(_isEditing ? 'Edit Contact' : 'New Contact'),
       ),
       body: SingleChildScrollView(

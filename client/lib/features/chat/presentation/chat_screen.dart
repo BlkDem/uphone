@@ -132,23 +132,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             context.go('/chats');
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(currentChat.name.isNotEmpty ? currentChat.name : 'Chat'),
-            if (chatState.typingUsers.isNotEmpty)
-              Text(
-                'typing...',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              backgroundImage: currentChat.avatarUrl.isNotEmpty
+                  ? NetworkImage(currentChat.avatarUrl)
+                  : null,
+              child: currentChat.avatarUrl.isEmpty
+                  ? Text(
+                      currentChat.name.isNotEmpty
+                          ? currentChat.name[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    currentChat.name.isNotEmpty ? currentChat.name : 'Chat',
+                    style: const TextStyle(fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (chatState.typingUsers.isNotEmpty)
+                    Text(
+                      'typing...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                     ),
+                ],
               ),
+            ),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.photo_library_outlined),
-            onPressed: () => context.go('/chats/${widget.chatId}/gallery'),
+            onPressed: () => context.push('/chats/${widget.chatId}/gallery'),
           ),
           if (currentChat.type == 'personal')
             IconButton(
@@ -160,20 +188,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               icon: const Icon(Icons.call_outlined),
               onPressed: () => _startCall('audio'),
             ),
-          if (currentChat.type != 'personal') ...[
+          if (currentChat.type != 'personal')
             IconButton(
               icon: const Icon(Icons.videocam_outlined),
               onPressed: () => _startGroupCall('video'),
             ),
+          if (currentChat.type != 'personal')
             IconButton(
               icon: const Icon(Icons.call_outlined),
               onPressed: () => _startGroupCall('audio'),
             ),
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: () => context.go('/chats/${widget.chatId}/info'),
-            ),
-          ],
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => context.push('/chats/${widget.chatId}/info'),
+          ),
         ],
       ),
       body: Column(

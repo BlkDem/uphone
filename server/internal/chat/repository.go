@@ -74,6 +74,34 @@ func (r *Repository) GetByID(ctx context.Context, chatID string) (*Chat, error) 
 	if createdBy.Valid {
 		chat.CreatedBy = createdBy.String
 	}
+
+	return chat, nil
+}
+
+func (r *Repository) GetByIDForUser(ctx context.Context, chatID, userID string) (*Chat, error) {
+	chat, err := r.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+
+	if chat.Type == ChatTypePersonal && chat.Name == "" {
+		var peerName, peerAvatar sql.NullString
+		err = r.db.QueryRowContext(ctx,
+			`SELECT COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
+			 FROM chat_members cm
+			 INNER JOIN users u ON cm.user_id = u.id
+			 WHERE cm.chat_id = ? AND cm.user_id != ?
+			 LIMIT 1`, chatID, userID).Scan(&peerName, &peerAvatar)
+		if err == nil {
+			if peerName.String != "" {
+				chat.Name = peerName.String
+			}
+			if peerAvatar.String != "" {
+				chat.AvatarURL = peerAvatar.String
+			}
+		}
+	}
+
 	return chat, nil
 }
 
@@ -84,16 +112,19 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 		        lm.id, lm.chat_id, lm.sender_id, COALESCE(lm.content,''), lm.type,
 		        COALESCE(lm.file_url,''), COALESCE(lm.reply_to,''), lm.is_pinned, lm.is_deleted,
 		        lm.created_at, lm.updated_at,
-		        lu.id, lu.username, COALESCE(lu.display_name,''), COALESCE(lu.avatar_url,'')
+		        lu.id, lu.username, COALESCE(lu.display_name,''), COALESCE(lu.avatar_url,''),
+		        COALESCE(u_peer.display_name,''), COALESCE(u_peer.username,''), COALESCE(u_peer.avatar_url,'')
 		 FROM chats c
 		 INNER JOIN chat_members cm ON c.id = cm.chat_id
+		 LEFT JOIN chat_members cm_peer ON c.id = cm_peer.chat_id AND cm_peer.user_id != ? AND c.type = 'personal'
+		 LEFT JOIN users u_peer ON cm_peer.user_id = u_peer.id
 		 LEFT JOIN messages lm ON lm.chat_id = c.id AND lm.id = (
 		     SELECT m2.id FROM messages m2 WHERE m2.chat_id = c.id AND m2.is_deleted = FALSE
 		     ORDER BY m2.created_at DESC LIMIT 1
 		 )
 		 LEFT JOIN users lu ON lm.sender_id = lu.id
 		 WHERE cm.user_id = ?
-		 ORDER BY c.updated_at DESC`, userID)
+		 ORDER BY c.updated_at DESC`, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +138,7 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 		var lmIsPinned, lmIsDeleted sql.NullBool
 		var lmCreatedAt, lmUpdatedAt sql.NullTime
 		var luID, luUsername, luDisplayName, luAvatarURL sql.NullString
+		var peerDisplayName, peerUsername, peerAvatarURL sql.NullString
 
 		if err := rows.Scan(
 			&c.ID, &chatType, &c.Name, &c.Description, &c.AvatarURL,
@@ -114,10 +146,25 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 			&lmID, &lmChatID, &lmSenderID, &lmContent, &lmType,
 			&lmFileURL, &lmReplyTo, &lmIsPinned, &lmIsDeleted,
 			&lmCreatedAt, &lmUpdatedAt,
-			&luID, &luUsername, &luDisplayName, &luAvatarURL); err != nil {
+			&luID, &luUsername, &luDisplayName, &luAvatarURL,
+			&peerDisplayName, &peerUsername, &peerAvatarURL); err != nil {
 			return nil, err
 		}
 		c.Type = ChatType(chatType)
+
+		// For personal chats, populate name/avatar from peer user
+		if c.Type == ChatTypePersonal {
+			if c.Name == "" {
+				if peerDisplayName.String != "" {
+					c.Name = peerDisplayName.String
+				} else if peerUsername.String != "" {
+					c.Name = peerUsername.String
+				}
+			}
+			if c.AvatarURL == "" {
+				c.AvatarURL = peerAvatarURL.String
+			}
+		}
 
 		if lmID.Valid {
 			msg := &Message{

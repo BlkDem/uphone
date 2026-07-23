@@ -13,6 +13,11 @@ type Config struct {
 	UploadBaseURL  string
 	GoogleClientID string
 	FCMCredentials string
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
 }
 
 type DBConfig struct {
@@ -38,6 +43,11 @@ func Load() *Config {
 		UploadBaseURL:  getEnv("UPLOAD_BASE_URL", ""),
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 		FCMCredentials: getEnv("FCM_CREDENTIALS", ""),
+		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", ""),
+		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", ""),
+		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", ""),
+		MinIOBucket:    getEnv("MINIO_BUCKET", "uphone-uploads"),
+		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "") == "true",
 	}
 }
 
