@@ -216,6 +216,9 @@ class WsKeepAliveService : Service() {
                     if (type == "call-request" || type == "call-invite") {
                         debugLog(this@WsKeepAliveService, "CALL INCOMING! type=$type msg=$text")
                         handler.post { handleCallMessage(msg) }
+                    } else if (type == "call-reject" || type == "call-end") {
+                        debugLog(this@WsKeepAliveService, "CALL CANCELLED! type=$type msg=$text")
+                        handler.post { handleCallCancelled(msg) }
                     }
                 } catch (e: Exception) {
                     debugLog(this@WsKeepAliveService, "WS parse error: ${e.message}")
@@ -275,13 +278,12 @@ class WsKeepAliveService : Service() {
 
         debugLog(this, "Call incoming: $callId from=$fromUser name=$fromName type=$callType")
 
-        val wasFirst = CallNotificationService.tryMarkCallHandled(callId)
-        CallNotificationService.cancelCallNotification(this)
-
-        if (!wasFirst) {
-            debugLog(this, "Already handled, skipping")
+        if (!CallNotificationService.tryMarkCallHandled(callId)) {
+            debugLog(this, "Already handled by another path, skipping")
             return
         }
+
+        CallNotificationService.cancelCallNotification(this)
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = pm.newWakeLock(
@@ -292,7 +294,8 @@ class WsKeepAliveService : Service() {
         debugLog(this, "WakeLock acquired, app foreground=${MainActivity.isInForeground}")
 
         if (MainActivity.isInForeground) {
-            debugLog(this, "App in foreground, Flutter handles call")
+            debugLog(this, "App in foreground, forwarding to Flutter via intent")
+            fallbackToActivity(callId, fromUser, fromName, callType, isGroup)
             return
         }
 
@@ -313,7 +316,30 @@ class WsKeepAliveService : Service() {
             debugLog(this, "CallOverlayService started")
         } catch (e: Exception) {
             debugLog(this, "Overlay FAILED: ${e.message}")
-            fallbackToActivity(callId, fromUser, fromName, callType, isGroup)
+        }
+    }
+
+    private fun handleCallCancelled(msg: JSONObject) {
+        val callId = msg.optString("call_id", "")
+        if (callId.isEmpty()) return
+
+        debugLog(this, "Call cancelled remotely: $callId type=${msg.optString("type")}")
+
+        CallNotificationService.clearCallHandled(callId)
+        cancelCallNotification(this)
+        CallOverlayService.stop(this)
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            nm.cancel(CallOverlayService.NOTIFICATION_ID)
+        } catch (_: Exception) {}
+
+        if (MainActivity.isInForeground) {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra("call_action", "END")
+                putExtra("call_id", callId)
+            }
+            try { startActivity(intent) } catch (_: Exception) {}
         }
     }
 

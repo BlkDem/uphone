@@ -86,6 +86,7 @@ class _IncomingCallListenerState
         }
       } else if (event is CallEndedEvent || event is CallRejectedEvent) {
         _closeIncomingCallScreen();
+        NotificationService.cancelCallNotification(callId: event.callId);
         _clearPending();
       }
     });
@@ -101,6 +102,10 @@ class _IncomingCallListenerState
         _rejectFromNotification(action);
       } else if (action.action == 'SHOW') {
         _showIncomingCallFromNotification(action);
+      } else if (action.action == 'END') {
+        _closeIncomingCallScreen();
+        NotificationService.cancelCallNotification(callId: action.callId);
+        _clearPending();
       }
     });
   }
@@ -135,7 +140,7 @@ class _IncomingCallListenerState
   }
 
   void _acceptFromNotification(NotificationAction action) {
-    NotificationService.cancelCallNotification();
+    NotificationService.cancelCallNotification(callId: action.callId);
     final webrtc = ref.read(webRTCServiceProvider);
     webrtc.acceptCall(
       action.callId,
@@ -143,11 +148,27 @@ class _IncomingCallListenerState
       callType: action.callType,
       isGroup: action.isGroup,
     );
+    _isShowingIncomingCall = false;
+    final navKey = ref.read(navigatorKeyProvider);
+    final navigator = navKey.currentState;
+    if (navigator == null) return;
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          callId: action.callId,
+          remoteUserId: action.fromUserId,
+          remoteUserName: action.fromName ?? 'Unknown',
+          callType: action.callType,
+          isIncoming: true,
+          isGroup: action.isGroup,
+        ),
+      ),
+    );
   }
 
   void _rejectFromNotification(NotificationAction action) {
     _closeIncomingCallScreen();
-    NotificationService.cancelCallNotification();
+    NotificationService.cancelCallNotification(callId: action.callId);
     final webrtc = ref.read(webRTCServiceProvider);
     webrtc.rejectCall(action.callId, action.fromUserId);
   }
@@ -184,6 +205,11 @@ class _IncomingCallListenerState
 
   void _closeIncomingCallScreen() {
     _isShowingIncomingCall = false;
+    final navKey = ref.read(navigatorKeyProvider);
+    final navigator = navKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
   }
 
   void _clearPending() {

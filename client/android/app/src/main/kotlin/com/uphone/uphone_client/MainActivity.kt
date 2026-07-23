@@ -97,6 +97,10 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "cancelCallNotification" -> {
+                    val callId = call.argument<String>("callId") ?: ""
+                    if (callId.isNotEmpty()) {
+                        CallNotificationService.clearCallHandled(callId)
+                    }
                     CallNotificationService.cancelCallNotification(this)
                     CallOverlayService.stop(this)
                     result.success(null)
@@ -144,8 +148,16 @@ class MainActivity : FlutterActivity() {
 
     private fun handleIntent(intent: Intent) {
         val callAction = intent.getStringExtra("call_action") ?: return
+        val callId = intent.getStringExtra("call_id") ?: ""
+        if (callId.isNotEmpty()) {
+            CallNotificationService.clearCallHandled(callId)
+        }
         CallNotificationService.cancelCallNotification(this)
         WsKeepAliveService.cancelCallNotification(this)
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            nm.cancel(CallOverlayService.NOTIFICATION_ID)
+        } catch (_: Exception) {}
         val data = mapOf(
             "call_action" to callAction,
             "call_id" to (intent.getStringExtra("call_id") ?: ""),
@@ -164,6 +176,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        checkOverlayPermission()
         if (isCallIntent(intent)) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             showOverLockScreen()

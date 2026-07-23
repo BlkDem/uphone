@@ -16,6 +16,7 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
         if (type == "call-request" || type == "call-invite") {
             val callId = data["call_id"] ?: ""
             if (!tryMarkCallHandled(callId)) {
+                WsKeepAliveService.debugLog(this, "FCM: call $callId already handled, skipping")
                 return
             }
             launchCallOverlay(data)
@@ -33,12 +34,12 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
         val callType = data["call_type"] ?: "video"
         val isGroup = data["type"] == "call-invite"
 
-        WsKeepAliveService.debugLog(this, "FCM: handling call $callId, fg=${MainActivity.isInForeground}")
-
         if (MainActivity.isInForeground) {
-            WsKeepAliveService.debugLog(this, "FCM: app in foreground, Flutter handles")
+            WsKeepAliveService.debugLog(this, "FCM: app in foreground, WS handles it — skipping")
             return
         }
+
+        WsKeepAliveService.debugLog(this, "FCM: handling call $callId, starting overlay")
 
         val overlayIntent = Intent(this, CallOverlayService::class.java).apply {
             putExtra("call_id", callId)
@@ -56,16 +57,6 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
             WsKeepAliveService.debugLog(this, "FCM: overlay started")
         } catch (e: Exception) {
             WsKeepAliveService.debugLog(this, "FCM overlay failed: ${e.message}")
-            val intent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra("call_action", "SHOW")
-                putExtra("call_id", callId)
-                putExtra("from_user", fromUserId)
-                putExtra("from_name", fromName)
-                putExtra("call_type", callType)
-                putExtra("is_group", isGroup)
-            }
-            startActivity(intent)
         }
     }
 
@@ -89,6 +80,12 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
         fun isCallHandled(callId: String): Boolean {
             synchronized(handledCallIds) {
                 return handledCallIds.contains(callId)
+            }
+        }
+
+        fun clearCallHandled(callId: String) {
+            synchronized(handledCallIds) {
+                handledCallIds.remove(callId)
             }
         }
 

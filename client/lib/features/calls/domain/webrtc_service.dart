@@ -58,34 +58,7 @@ class WebRTCService {
 
     switch (type) {
       case 'call-request':
-        if (callId != null && fromUser != null && payload is Map<String, dynamic>) {
-          _currentCallId = callId;
-          _isGroupCall = false;
-          _chatId = payload['chat_id'] as String?;
-          _callEventController.add(IncomingCallEvent(
-            callId: callId,
-            fromUserId: fromUser,
-            fromName: payload['from_name'] ?? 'Unknown',
-            callType: payload['call_type'] ?? 'video',
-            isGroup: false,
-          ));
-        }
-        break;
-
       case 'call-invite':
-        if (callId != null && fromUser != null && payload is Map<String, dynamic>) {
-          _currentCallId = callId;
-          _isGroupCall = true;
-          _chatId = payload['chat_id'] as String?;
-          _callEventController.add(IncomingCallEvent(
-            callId: callId,
-            fromUserId: fromUser,
-            fromName: payload['from_name'] ?? 'Unknown',
-            callType: payload['call_type'] ?? 'video',
-            chatName: payload['chat_name'] as String?,
-            isGroup: true,
-          ));
-        }
         break;
 
       case 'call-join':

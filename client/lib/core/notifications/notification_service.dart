@@ -214,9 +214,9 @@ class NotificationService {
     } catch (_) {}
   }
 
-  static Future<void> cancelCallNotification() async {
+  static Future<void> cancelCallNotification({String? callId}) async {
     try {
-      await _callChannel.invokeMethod('cancelCallNotification');
+      await _callChannel.invokeMethod('cancelCallNotification', {'callId': callId});
     } catch (_) {}
   }
 

@@ -31,7 +31,7 @@ import android.widget.TextView
 class CallOverlayService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "uphone_overlay_service"
+        private const val CHANNEL_ID = "uphone_overlay_min"
         const val NOTIFICATION_ID = 9998
         const val TIMEOUT_MS = 60_000L
 
@@ -46,26 +46,39 @@ class CallOverlayService : Service() {
     private var vibrator: Vibrator? = null
     private val handler = Handler(Looper.getMainLooper())
     private var timeoutRunnable: Runnable? = null
+    private var currentCallId = ""
+    private var currentFromUser = ""
+    private var currentCallType = "video"
+    private var currentIsGroup = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val callId = intent?.getStringExtra("call_id") ?: run { stopSelf(); return START_NOT_STICKY }
-
-        if (!CallNotificationService.tryMarkCallHandled(callId)) {
-            WsKeepAliveService.debugLog(this, "Overlay for $callId already handled, skipping duplicate")
+        if (intent?.action == "REJECT") {
+            val callId = intent.getStringExtra("call_id") ?: ""
+            if (callId.isNotEmpty()) {
+                CallNotificationService.clearCallHandled(callId)
+            }
+            dismissAndStop()
             return START_NOT_STICKY
         }
+
+        val callId = intent?.getStringExtra("call_id") ?: run { stopSelf(); return START_NOT_STICKY }
 
         val fromName = intent.getStringExtra("from_name") ?: "Unknown"
         val fromUser = intent.getStringExtra("from_user") ?: ""
         val callType = intent.getStringExtra("call_type") ?: "video"
         val isGroup = intent.getBooleanExtra("is_group", false)
 
+        currentCallId = callId
+        currentFromUser = fromUser
+        currentCallType = callType
+        currentIsGroup = isGroup
+
         dismissOverlay()
         stopRingtone()
 
-        startForeground(NOTIFICATION_ID, buildNotification())
+        startForeground(NOTIFICATION_ID, buildNotification(fromName))
 
         try {
             showOverlay(callId, fromName, fromUser, callType, isGroup)
@@ -234,6 +247,10 @@ class CallOverlayService : Service() {
         stopRingtone()
         dismissOverlay()
         try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(NOTIFICATION_ID)
+        } catch (_: Exception) {}
+        try {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } catch (_: Exception) {
             @Suppress("DEPRECATION")
@@ -247,31 +264,66 @@ class CallOverlayService : Service() {
         super.onDestroy()
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(callerName: String): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Call Service",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Active call notification"
+            description = "Active call"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(channel)
 
-        val pendingIntent = PendingIntent.getActivity(
+        val fullScreenIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
             PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val acceptIntent = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra("call_action", "ACCEPT")
+                putExtra("call_id", currentCallId)
+                putExtra("from_user", currentFromUser)
+                putExtra("from_name", callerName)
+                putExtra("call_type", currentCallType)
+                putExtra("is_group", currentIsGroup)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val rejectIntent = PendingIntent.getService(
+            this,
+            2,
+            Intent(this, CallOverlayService::class.java).apply {
+                action = "REJECT"
+                putExtra("call_id", currentCallId)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
-            .setContentTitle("Incoming call")
-            .setContentText("Tap to open")
-            .setContentIntent(pendingIntent)
+            .setContentTitle("Звонит $callerName")
+            .setFullScreenIntent(fullScreenIntent, true)
+            .addAction(Notification.Action.Builder(
+                null, "Принять", acceptIntent
+            ).build())
+            .addAction(Notification.Action.Builder(
+                null, "Отклонить", rejectIntent
+            ).build())
+            .setCategory(Notification.CATEGORY_CALL)
             .setOngoing(true)
+            .setDefaults(0)
             .build()
     }
 }
