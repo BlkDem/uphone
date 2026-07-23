@@ -1,8 +1,10 @@
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
+import 'package:uphone_client/shared/models/chat.dart';
 
 class ChatInfoScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -19,6 +21,7 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
   bool _isEditing = false;
   late TextEditingController _nameController;
   late TextEditingController _descController;
+  Uint8List? _pendingAvatarBytes;
 
   @override
   void initState() {
@@ -64,54 +67,20 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
         .map((m) => m['role'])
         .firstOrNull;
     final isOwnerOrAdmin = myRole == 'owner' || myRole == 'admin';
+    final isPersonal = chat.type == 'personal';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(chat.name.isNotEmpty ? chat.name : 'Chat Info'),
-        actions: [
-          if (isOwnerOrAdmin)
-            IconButton(
-              icon: Icon(_isEditing ? Icons.check : Icons.edit),
-              onPressed: () {
-                if (_isEditing) {
-                  _saveChanges(chat);
-                } else {
-                  _nameController.text = chat.name;
-                  _descController.text = chat.description;
-                  setState(() => _isEditing = true);
-                }
-              },
-            ),
-          if (!isOwnerOrAdmin)
-            PopupMenuButton(
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'leave',
-                  child: ListTile(
-                    leading: Icon(Icons.exit_to_app, color: Colors.red),
-                    title: Text('Leave Group', style: TextStyle(color: Colors.red)),
-                  ),
-                ),
-              ],
-              onSelected: (v) {
-                if (v == 'leave') _leaveChat();
-              },
-            ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(isPersonal ? 'Contact Info' : (chat.name.isNotEmpty ? chat.name : 'Chat Info')),
       ),
       body: ListView(
         children: [
-          CircleAvatar(
-            radius: 48,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: Text(
-              chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
-              style: TextStyle(
-                fontSize: 36,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
+          const SizedBox(height: 24),
+          _buildAvatar(chat),
           const SizedBox(height: 16),
           if (_isEditing) ...[
             Padding(
@@ -121,12 +90,32 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
                 decoration: const InputDecoration(labelText: 'Name'),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _descController,
-                decoration: const InputDecoration(labelText: 'Description'),
+            if (!isPersonal)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _descController,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                ),
               ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _saveChanges(chat),
+                  icon: const Icon(Icons.check),
+                  label: const Text('Save'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () => setState(() {
+                    _isEditing = false;
+                    _pendingAvatarBytes = null;
+                  }),
+                  child: const Text('Cancel'),
+                ),
+              ],
             ),
           ] else ...[
             Center(
@@ -148,36 +137,125 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
                   ),
                 ),
               ),
+            const SizedBox(height: 12),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  _nameController.text = chat.name;
+                  _descController.text = chat.description;
+                  setState(() => _isEditing = true);
+                },
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
+              ),
+            ),
           ],
           const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text('Members', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                Text('${_members.length}', style: Theme.of(context).textTheme.bodyMedium),
-                if (isOwnerOrAdmin) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.person_add),
-                    onPressed: () => _showAddMemberDialog(),
-                  ),
+          if (!isPersonal) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text('Members', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  Text('${_members.length}', style: Theme.of(context).textTheme.bodyMedium),
+                  if (isOwnerOrAdmin) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.person_add),
+                      onPressed: () => _showAddMemberDialog(),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const Divider(),
-          if (_isLoading)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
-            ))
-          else
-            ..._members.map((member) => _buildMemberTile(member, myRole, currentUserId)),
+            const Divider(),
+            if (_isLoading)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ))
+            else
+              ..._members.map((member) => _buildMemberTile(member, myRole, currentUserId)),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildAvatar(Chat chat) {
+    return Center(
+      child: Stack(
+        children: [
+          CircleAvatar(
+            radius: 56,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            backgroundImage: _pendingAvatarBytes != null
+                ? MemoryImage(_pendingAvatarBytes!)
+                : (chat.avatarUrl.isNotEmpty ? NetworkImage(chat.avatarUrl) : null),
+            child: (_pendingAvatarBytes == null && chat.avatarUrl.isEmpty)
+                ? Text(
+                    chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      fontSize: 42,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  )
+                : null,
+          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _pickAvatar,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.camera_alt,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAvatar() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result != null && result.files.first.bytes != null) {
+      setState(() => _pendingAvatarBytes = result.files.first.bytes);
+      await _uploadAvatar();
+    }
+  }
+
+  Future<void> _uploadAvatar() async {
+    if (_pendingAvatarBytes == null) return;
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final result = await repo.uploadFile('avatar.jpg', 'image/jpeg', _pendingAvatarBytes!);
+      final dio = ref.read(apiClientProvider).dio;
+      await dio.put('/api/v1/chats/${widget.chatId}', data: {
+        'avatar_url': result['url'],
+      });
+      ref.read(chatProvider.notifier).loadChats();
+      setState(() => _pendingAvatarBytes = null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload avatar: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildMemberTile(dynamic member, String? myRole, String currentUserId) {
@@ -254,22 +332,16 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
     } catch (_) {}
   }
 
-  Future<void> _leaveChat() async {
+  Future<void> _saveChanges(Chat chat) async {
     try {
       final dio = ref.read(apiClientProvider).dio;
-      await dio.post('/api/v1/chats/${widget.chatId}/leave');
-      ref.read(chatProvider.notifier).loadChats();
-      if (mounted) context.go('/chats');
-    } catch (_) {}
-  }
-
-  Future<void> _saveChanges(dynamic chat) async {
-    try {
-      final dio = ref.read(apiClientProvider).dio;
-      await dio.put('/api/v1/chats/${widget.chatId}', data: {
+      final data = <String, dynamic>{
         'name': _nameController.text.trim(),
-        'description': _descController.text.trim(),
-      });
+      };
+      if (chat.type != 'personal') {
+        data['description'] = _descController.text.trim();
+      }
+      await dio.put('/api/v1/chats/${widget.chatId}', data: data);
       setState(() => _isEditing = false);
       ref.read(chatProvider.notifier).loadChats();
     } catch (_) {}

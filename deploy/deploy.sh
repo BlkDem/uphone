@@ -18,6 +18,9 @@ GO_VERSION="1.24.4"
 FLUTTER_CHANNEL="stable"
 SKIP_FLUTTER_BUILD=false
 DEPLOYED_DOMAIN=""
+USE_MINIO=true
+MINIO_ROOT_USER="uphone_minio"
+MINIO_ROOT_PASS=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -97,6 +100,63 @@ mysql -u root <<-EOSQL
 EOSQL
 log "Database ready. User: ${DB_USER}, Pass: ${DB_PASS}"
 
+# ---- 4b. MinIO (object storage) ----
+MINIO_DATA_DIR="${DATA_DIR}/minio"
+MINIO_BUCKET="uphone-uploads"
+MINIO_PORT=9000
+MINIO_CONSOLE_PORT=9001
+
+if [[ "${USE_MINIO}" == "true" ]]; then
+    log "Installing MinIO..."
+    mkdir -p "${MINIO_DATA_DIR}"
+
+    MINIO_ROOT_PASS="${MINIO_ROOT_PASS:-$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)}"
+
+    if ! command -v minio &>/dev/null; then
+        cd /tmp
+        wget -q "https://dl.min.io/server/minio/release/linux-amd64/minio" -O /usr/local/bin/minio
+        chmod +x /usr/local/bin/minio
+    fi
+
+    # Create MinIO systemd service
+    cat > /etc/systemd/system/minio.service <<EOF
+[Unit]
+Description=MinIO Object Storage
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Environment=MINIO_ROOT_USER=${MINIO_ROOT_USER}
+Environment=MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASS}
+ExecStart=/usr/local/bin/minio server ${MINIO_DATA_DIR} --address :${MINIO_PORT} --console-address :${MINIO_CONSOLE_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now minio
+
+    # Wait for MinIO to start
+    sleep 2
+
+    # Install mc (MinIO client) for bucket management
+    if ! command -v mc &>/dev/null; then
+        wget -q "https://dl.min.io/client/mc/release/linux-amd64/mc" -O /usr/local/bin/mc
+        chmod +x /usr/local/bin/mc
+    fi
+
+    mc alias set local http://127.0.0.1:${MINIO_PORT} "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASS}" 2>/dev/null
+    mc mb --ignore-existing "local/${MINIO_BUCKET}" 2>/dev/null
+
+    log "MinIO: running on :${MINIO_PORT}, console on :${MINIO_CONSOLE_PORT}, bucket=${MINIO_BUCKET}"
+else
+    log "MinIO disabled, using local filesystem for uploads"
+fi
+
 # ---- 5. Deploy application ----
 log "Deploying application..."
 mkdir -p "${DEPLOY_DIR}" "${DATA_DIR}/uploads" "${CONF_DIR}" "${WEB_DIR}"
@@ -170,6 +230,17 @@ JWT_SECRET=${JWT_SECRET}
 GOOGLE_CLIENT_ID=
 FCM_CREDENTIALS=${CONF_DIR}/firebase-service-account.json
 EOF
+
+    if [[ "${USE_MINIO}" == "true" ]]; then
+        cat >> "${CONF_DIR}/uphone.env" <<EOF
+MINIO_ENDPOINT=127.0.0.1:${MINIO_PORT}
+MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+MINIO_SECRET_KEY=${MINIO_ROOT_PASS}
+MINIO_BUCKET=${MINIO_BUCKET}
+MINIO_USE_SSL=false
+EOF
+    fi
+
     chmod 600 "${CONF_DIR}/uphone.env"
     log "Config written to ${CONF_DIR}/uphone.env"
     log ">>> EDIT THIS FILE to set GOOGLE_CLIENT_ID and verify settings <<<"
@@ -398,6 +469,11 @@ echo "  Apache logs: /var/log/apache2/uphone_*.log"
 echo ""
 echo "  DB user:     ${DB_USER}"
 echo "  DB pass:     ${DB_PASS}"
+if [[ "${USE_MINIO}" == "true" ]]; then
+    echo "  MinIO:       http://${DISPLAY_HOST}:${MINIO_PORT}"
+    echo "  MinIO console: http://${DISPLAY_HOST}:${MINIO_CONSOLE_PORT}"
+    echo "  MinIO bucket:  ${MINIO_BUCKET}"
+fi
 echo ""
 echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
 echo "============================================"

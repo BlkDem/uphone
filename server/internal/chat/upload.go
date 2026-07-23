@@ -4,25 +4,28 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/uphone/server/internal/middleware"
 	"github.com/uphone/server/internal/shared"
+	"github.com/uphone/server/internal/storage"
 )
 
 type UploadHandler struct {
-	uploadDir string
-	baseURL   string
+	s3      storage.Storage
+	baseURL string
 }
 
-func NewUploadHandler(uploadDir string, baseURL string) *UploadHandler {
-	return &UploadHandler{uploadDir: uploadDir, baseURL: baseURL}
+func NewUploadHandler(s3 storage.Storage, baseURL string) *UploadHandler {
+	return &UploadHandler{s3: s3, baseURL: baseURL}
+}
+
+func (h *UploadHandler) Storage() storage.Storage {
+	return h.s3
 }
 
 func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -69,19 +72,15 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	rand.Read(randBytes)
 	timestamp := time.Now().UnixMilli()
 	filename := fmt.Sprintf("%s_%d_%s%s", userID[:8], timestamp, hex.EncodeToString(randBytes), ext)
-	destPath := filepath.Join(h.uploadDir, filename)
 
-	dest, err := os.Create(destPath)
-	if err != nil {
-		log.Printf("Upload: failed to create file: %v", err)
-		shared.WriteError(w, http.StatusInternalServerError, "failed to save file")
-		return
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
 	}
-	defer dest.Close()
 
-	if _, err := io.Copy(dest, file); err != nil {
-		log.Printf("Upload: failed to write file: %v", err)
-		shared.WriteError(w, http.StatusInternalServerError, "failed to write file")
+	if err := h.s3.Upload(r.Context(), filename, file, header.Size, contentType); err != nil {
+		log.Printf("Upload: failed to upload: %v", err)
+		shared.WriteError(w, http.StatusInternalServerError, "failed to save file")
 		return
 	}
 
@@ -95,12 +94,9 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 func (h *UploadHandler) ServeFile(w http.ResponseWriter, r *http.Request) {
 	filename := strings.TrimPrefix(r.URL.Path, "/uploads/")
-	filePath := filepath.Join(h.uploadDir, filepath.Base(filename))
-
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	if filename == "" {
 		http.NotFound(w, r)
 		return
 	}
-
-	http.ServeFile(w, r, filePath)
+	storage.ServeFile(w, r, h.s3, filename)
 }

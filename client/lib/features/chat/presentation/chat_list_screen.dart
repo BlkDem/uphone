@@ -120,7 +120,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         children: [
           FloatingActionButton.small(
             heroTag: 'group',
-            onPressed: () => context.go('/chats/create'),
+            onPressed: () => context.push('/chats/create'),
             child: const Icon(Icons.group_add),
           ),
           const SizedBox(height: 8),
@@ -193,15 +193,20 @@ class ChatTile extends StatelessWidget {
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        child: Text(
-          chat.name.isNotEmpty
-              ? chat.name[0].toUpperCase()
-              : '?',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        backgroundImage: chat.avatarUrl.isNotEmpty
+            ? NetworkImage(chat.avatarUrl)
+            : null,
+        child: chat.avatarUrl.isEmpty
+            ? Text(
+                chat.name.isNotEmpty
+                    ? chat.name[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            : null,
       ),
       title: Text(
         chat.name.isNotEmpty ? chat.name : 'Chat',
