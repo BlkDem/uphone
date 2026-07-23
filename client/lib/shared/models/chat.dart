@@ -51,6 +51,7 @@ class ChatMessage {
   final String replyTo;
   final bool isPinned;
   final bool isDeleted;
+  final String status;
   final DateTime createdAt;
   final DateTime updatedAt;
   final MessageSender? sender;
@@ -65,6 +66,7 @@ class ChatMessage {
     this.replyTo = '',
     this.isPinned = false,
     this.isDeleted = false,
+    this.status = '',
     required this.createdAt,
     required this.updatedAt,
     this.sender,
@@ -81,6 +83,7 @@ class ChatMessage {
       replyTo: json['reply_to'] ?? '',
       isPinned: json['is_pinned'] ?? false,
       isDeleted: json['is_deleted'] ?? false,
+      status: json['status'] ?? '',
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       sender: json['sender'] != null ? MessageSender.fromJson(json['sender']) : null,

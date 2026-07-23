@@ -169,6 +169,8 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		msg.Sender = sender
 	}
 
+	msg.Status = "delivered"
+
 	members, err := h.repo.GetMembers(r.Context(), chatID)
 	if err == nil && len(members) > 0 {
 		userIDs := make([]string, len(members))
@@ -217,7 +219,7 @@ func (h *APIHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.repo.GetMessages(r.Context(), chatID, 50, 0)
+	messages, err := h.repo.GetMessages(r.Context(), chatID, userID, 50, 0)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, "failed to get messages")
 		return
@@ -620,6 +622,8 @@ func (h *APIHandler) ForwardMessage(w http.ResponseWriter, r *http.Request) {
 	if sender != nil {
 		newMsg.Sender = sender
 	}
+
+	newMsg.Status = "delivered"
 
 	members, err := h.repo.GetMembers(r.Context(), req.ChatID)
 	if err == nil && len(members) > 0 {

@@ -339,7 +339,7 @@ func (r *Repository) SendMessage(ctx context.Context, msg *Message) error {
 	return nil
 }
 
-func (r *Repository) GetMessages(ctx context.Context, chatID string, limit, offset int) ([]Message, error) {
+func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, limit, offset int) ([]Message, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -348,12 +348,20 @@ func (r *Repository) GetMessages(ctx context.Context, chatID string, limit, offs
 		`SELECT m.id, m.chat_id, m.sender_id, COALESCE(m.content,''), m.type,
 		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
 		        m.created_at, m.updated_at,
-		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
+		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,''),
+		        CASE
+		            WHEN m.sender_id = ? THEN
+		                CASE
+		                    WHEN EXISTS(SELECT 1 FROM message_reads mr JOIN chat_members cm ON mr.user_id = cm.user_id WHERE mr.message_id = m.id AND mr.user_id != m.sender_id AND cm.chat_id = m.chat_id) THEN 'read'
+		                    ELSE 'delivered'
+		                END
+		            ELSE ''
+		        END
 		 FROM messages m
 		 LEFT JOIN users u ON m.sender_id = u.id
 		 WHERE m.chat_id = ?
 		 ORDER BY m.created_at DESC
-		 LIMIT ? OFFSET ?`, chatID, limit, offset)
+		 LIMIT ? OFFSET ?`, userID, chatID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -364,12 +372,13 @@ func (r *Repository) GetMessages(ctx context.Context, chatID string, limit, offs
 		var msg Message
 		var senderID, username, displayName, avatarURL sql.NullString
 		var replyTo sql.NullString
+		var status sql.NullString
 
 		if err := rows.Scan(
 			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
 			&msg.FileURL, &replyTo, &msg.IsPinned, &msg.IsDeleted,
 			&msg.CreatedAt, &msg.UpdatedAt,
-			&senderID, &username, &displayName, &avatarURL); err != nil {
+			&senderID, &username, &displayName, &avatarURL, &status); err != nil {
 			return nil, err
 		}
 
@@ -383,6 +392,9 @@ func (r *Repository) GetMessages(ctx context.Context, chatID string, limit, offs
 				DisplayName: displayName.String,
 				AvatarURL:   avatarURL.String,
 			}
+		}
+		if status.Valid {
+			msg.Status = status.String
 		}
 
 		messages = append(messages, msg)
@@ -557,11 +569,17 @@ func (r *Repository) MarkAsRead(ctx context.Context, chatID, userID, messageID s
 	}
 
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, ?)
-		 ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)`,
-		messageID, userID, time.Now().UTC())
+		`INSERT INTO message_reads (message_id, user_id, read_at)
+		 SELECT m.id, ?, NOW()
+		 FROM messages m
+		 WHERE m.chat_id = ? AND m.sender_id != ?
+		   AND m.created_at <= ?
+		   AND NOT EXISTS (
+		     SELECT 1 FROM message_reads mr WHERE mr.message_id = m.id AND mr.user_id = ?
+		   )`,
+		userID, chatID, userID, msgTime, userID)
 	if err != nil {
-		return fmt.Errorf("insert message_read: %w", err)
+		return fmt.Errorf("insert message_reads: %w", err)
 	}
 
 	_, err = r.db.ExecContext(ctx,

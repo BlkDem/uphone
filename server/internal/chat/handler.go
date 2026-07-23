@@ -182,6 +182,8 @@ func (h *Handler) handleSendMessage(ctx context.Context, senderID, chatID, conte
 		msg.Sender = sender
 	}
 
+	msg.Status = "delivered"
+
 	members, err := h.repo.GetMembers(ctx, chatID)
 	if err != nil {
 		return
@@ -280,6 +282,8 @@ func (h *Handler) handleMissedCall(info *webrtc.MissedCallInfo) {
 		log.Printf("missed call system message error: %v", err)
 		return
 	}
+
+	sysMsg.Status = "delivered"
 
 	members, err := h.repo.GetMembers(ctx, info.ChatID)
 	if err == nil {
