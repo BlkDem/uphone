@@ -14,6 +14,7 @@ func Migrate(db *sql.DB) error {
 		"migrations/003_contacts.sql",
 		"migrations/004_admin.sql",
 		"migrations/005_fcm_token.sql",
+		"migrations/006_message_reads.sql",
 	}
 
 	for _, migrationPath := range migrations {

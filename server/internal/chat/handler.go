@@ -105,7 +105,7 @@ func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMes
 		if err := json.Unmarshal(raw, &req); err != nil {
 			return
 		}
-		_ = req
+		h.handleReadMessage(ctx, userID, req.ChatID, req.MsgID)
 
     case "call-request", "call-accept", "call-reject", "call-end",
         "call-join", "call-leave",
@@ -131,6 +131,25 @@ func (h *Handler) handleWSMessage(userID string, msgType string, raw json.RawMes
                 }
             }
         })
+	}
+}
+
+func (h *Handler) handleReadMessage(ctx context.Context, userID, chatID, msgID string) {
+	if err := h.repo.MarkAsRead(ctx, chatID, userID, msgID); err != nil {
+		log.Printf("mark read error: %v", err)
+		return
+	}
+	members, err := h.repo.GetMembers(ctx, chatID)
+	if err != nil {
+		return
+	}
+	for _, m := range members {
+		if m.UserID != userID {
+			h.hub.SendToUser(m.UserID, mustMarshal(&Envelope{
+				Type:    "message.read",
+				Payload: map[string]string{"chatId": chatID, "userId": userID, "messageId": msgID},
+			}))
+		}
 	}
 }
 

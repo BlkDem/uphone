@@ -85,6 +85,12 @@ class ChatRepository {
     return ChatMessage.fromJson(response.data);
   }
 
+  Future<void> markAsRead(String chatId, String messageId) async {
+    await _dio.post('/api/v1/chats/$chatId/read', data: {
+      'message_id': messageId,
+    });
+  }
+
   Future<Map<String, String>> uploadFile(String filename, String mimeType, Uint8List bytes) async {
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(
@@ -203,12 +209,59 @@ class ChatNotifier extends StateNotifier<ChatState> {
           }
         }
         break;
+      case 'message.read':
+        if (payload is Map<String, dynamic>) {
+          final chatId = payload['chatId'] as String?;
+          final msgId = payload['messageId'] as String?;
+          if (chatId != null && msgId != null) {
+            // Decrement unread count for this chat
+            final updatedChats = state.chats.map((chat) {
+              if (chat.id == chatId && chat.unreadCount > 0) {
+                return Chat(
+                  id: chat.id,
+                  type: chat.type,
+                  name: chat.name,
+                  description: chat.description,
+                  avatarUrl: chat.avatarUrl,
+                  createdBy: chat.createdBy,
+                  createdAt: chat.createdAt,
+                  updatedAt: chat.updatedAt,
+                  lastMessage: chat.lastMessage,
+                  unreadCount: chat.unreadCount - 1,
+                );
+              }
+              return chat;
+            }).toList();
+            state = state.copyWith(chats: updatedChats);
+          }
+        }
+        break;
     }
   }
 
   void _addMessage(ChatMessage msg) {
     if (msg.chatId == state.activeChatId) {
       state = state.copyWith(messages: [...state.messages, msg]);
+    } else {
+      // Increment unread count for non-active chat
+      final updatedChats = state.chats.map((chat) {
+        if (chat.id == msg.chatId) {
+          return Chat(
+            id: chat.id,
+            type: chat.type,
+            name: chat.name,
+            description: chat.description,
+            avatarUrl: chat.avatarUrl,
+            createdBy: chat.createdBy,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            lastMessage: chat.lastMessage,
+            unreadCount: chat.unreadCount + 1,
+          );
+        }
+        return chat;
+      }).toList();
+      state = state.copyWith(chats: updatedChats);
     }
     _updateChatLastMessage(msg);
   }
@@ -226,6 +279,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           createdAt: chat.createdAt,
           updatedAt: DateTime.now(),
           lastMessage: msg,
+          unreadCount: chat.unreadCount,
         );
       }
       return chat;
@@ -255,9 +309,41 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final messages = await _repository.getMessages(chatId);
       messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
       state = state.copyWith(messages: messages, isLoadingMessages: false);
+      // Mark chat as read
+      await markAsRead(chatId);
     } catch (_) {
       state = state.copyWith(isLoadingMessages: false);
     }
+  }
+
+  Future<void> markAsRead(String chatId) async {
+    try {
+      // Get the last message ID to mark as read
+      final messages = await _repository.getMessages(chatId, limit: 1);
+      if (messages.isNotEmpty) {
+        final lastMsg = messages.first;
+        await _repository.markAsRead(chatId, lastMsg.id);
+        // Reset unread count locally
+        final updatedChats = state.chats.map((chat) {
+          if (chat.id == chatId) {
+            return Chat(
+              id: chat.id,
+              type: chat.type,
+              name: chat.name,
+              description: chat.description,
+              avatarUrl: chat.avatarUrl,
+              createdBy: chat.createdBy,
+              createdAt: chat.createdAt,
+              updatedAt: chat.updatedAt,
+              lastMessage: chat.lastMessage,
+              unreadCount: 0,
+            );
+          }
+          return chat;
+        }).toList();
+        state = state.copyWith(chats: updatedChats);
+      }
+    } catch (_) {}
   }
 
   Future<void> closeChat() async {

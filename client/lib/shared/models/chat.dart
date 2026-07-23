@@ -8,6 +8,7 @@ class Chat {
   final DateTime createdAt;
   final DateTime updatedAt;
   final ChatMessage? lastMessage;
+  final int unreadCount;
 
   const Chat({
     required this.id,
@@ -19,6 +20,7 @@ class Chat {
     required this.createdAt,
     required this.updatedAt,
     this.lastMessage,
+    this.unreadCount = 0,
   });
 
   factory Chat.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class Chat {
       lastMessage: json['last_message'] != null
           ? ChatMessage.fromJson(json['last_message'])
           : null,
+      unreadCount: json['unread_count'] ?? 0,
     );
   }
 }
