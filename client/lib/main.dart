@@ -10,6 +10,8 @@ import 'core/router/app_router.dart';
 import 'features/auth/domain/auth_provider.dart';
 import 'features/calls/presentation/incoming_call_listener.dart';
 
+final themeModeProvider = StateProvider<ThemeMode>((ref) => AppSettings.instance.themeMode);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ServerConfig.instance.load();
@@ -31,19 +33,25 @@ void main() async {
   ));
 }
 
-class UPhoneApp extends ConsumerWidget {
+class UPhoneApp extends ConsumerStatefulWidget {
   const UPhoneApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UPhoneApp> createState() => _UPhoneAppState();
+}
+
+class _UPhoneAppState extends ConsumerState<UPhoneApp> {
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'UPhone',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) => IncomingCallListener(child: child ?? const SizedBox()),
     );

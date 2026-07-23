@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
+import 'package:uphone_client/main.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late int _slideshowInterval;
   late bool _slideshowAutoplay;
 
@@ -22,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final themeMode = ref.watch(themeModeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -33,6 +36,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
+          _SectionHeader(title: 'Appearance', theme: theme),
+          ListTile(
+            leading: Icon(
+              switch (themeMode) {
+                ThemeMode.light => Icons.light_mode,
+                ThemeMode.dark => Icons.dark_mode,
+                ThemeMode.system => Icons.brightness_auto,
+              },
+            ),
+            title: const Text('Theme'),
+            subtitle: Text(
+              switch (themeMode) {
+                ThemeMode.light => 'Light',
+                ThemeMode.dark => 'Dark',
+                ThemeMode.system => 'System',
+              },
+            ),
+            trailing: SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode, size: 18)),
+                ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto, size: 18)),
+                ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode, size: 18)),
+              ],
+              selected: {themeMode},
+              onSelectionChanged: (selected) {
+                final mode = selected.first;
+                ref.read(themeModeProvider.notifier).state = mode;
+                AppSettings.instance.themeMode = mode;
+              },
+            ),
+          ),
+          const Divider(),
           _SectionHeader(title: 'Media Gallery', theme: theme),
           SwitchListTile(
             title: const Text('Auto-play slideshow'),

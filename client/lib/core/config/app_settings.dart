@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSettings {
@@ -24,4 +25,25 @@ class AppSettings {
 
   bool get slideshowAutoplay => _prefs.getBool('slideshow_autoplay') ?? true;
   set slideshowAutoplay(bool value) => _prefs.setBool('slideshow_autoplay', value);
+
+  ThemeMode get themeMode {
+    final value = _prefs.getString('theme_mode') ?? 'system';
+    switch (value) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  set themeMode(ThemeMode mode) {
+    final value = switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    };
+    _prefs.setString('theme_mode', value);
+  }
 }
