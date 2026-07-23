@@ -591,3 +591,37 @@ func (r *Repository) ForwardMessage(ctx context.Context, targetChatID string, ms
 
 	return nil
 }
+
+func (r *Repository) SaveCallLog(ctx context.Context, callID, chatID, callerID, calleeID, callType, status string, startedAt time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO call_logs (id, call_id, chat_id, caller_id, callee_id, call_type, status, started_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		uuid.New().String(), callID, chatID, callerID, calleeID, callType, status, startedAt, time.Now().UTC())
+	return err
+}
+
+func (r *Repository) SendSystemMessage(ctx context.Context, chatID, content string) (*Message, error) {
+	msg := &Message{
+		ID:        uuid.New().String(),
+		ChatID:    chatID,
+		SenderID:  "",
+		Content:   content,
+		Type:      "system",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO messages (id, chat_id, sender_id, content, type, created_at, updated_at)
+		 VALUES (?, '', ?, ?, ?, ?, ?)`,
+		msg.ID, msg.ChatID, msg.Content, msg.Type, msg.CreatedAt, msg.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("insert system message: %w", err)
+	}
+
+	_, _ = r.db.ExecContext(ctx,
+		`UPDATE chats SET updated_at = ? WHERE id = ?`,
+		msg.UpdatedAt, msg.ChatID)
+
+	return msg, nil
+}

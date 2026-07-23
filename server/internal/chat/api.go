@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/uphone/server/internal/fcm"
 	"github.com/uphone/server/internal/middleware"
 	"github.com/uphone/server/internal/shared"
 	"github.com/uphone/server/internal/users"
@@ -15,10 +16,11 @@ type APIHandler struct {
 	repo     *Repository
 	userRepo *users.Repository
 	hub      *Hub
+	fcm      *fcm.Service
 }
 
-func NewAPIHandler(repo *Repository, userRepo *users.Repository, hub *Hub) *APIHandler {
-	return &APIHandler{repo: repo, userRepo: userRepo, hub: hub}
+func NewAPIHandler(repo *Repository, userRepo *users.Repository, hub *Hub, fcm *fcm.Service) *APIHandler {
+	return &APIHandler{repo: repo, userRepo: userRepo, hub: hub, fcm: fcm}
 }
 
 func (h *APIHandler) resolveMembers(r *http.Request, members []string, selfID string) ([]string, error) {
@@ -177,6 +179,29 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			Type:    "message.new",
 			Payload: msg,
 		})
+
+		senderName := ""
+		if sender != nil {
+			senderName = sender.DisplayName
+			if senderName == "" {
+				senderName = sender.Username
+			}
+		}
+		chatName := ""
+		if chat, err := h.repo.GetByID(r.Context(), chatID); err == nil {
+			chatName = chat.Name
+		}
+		for _, uid := range userIDs {
+			if uid == userID {
+				continue
+			}
+			h.fcm.SendMessageNotification(r.Context(), h.repo.db, uid, &fcm.MessageNotification{
+				SenderName: senderName,
+				ChatName:   chatName,
+				Content:    req.Content,
+				ChatID:     chatID,
+			})
+		}
 	}
 
 	shared.WriteJSON(w, http.StatusCreated, msg)
@@ -603,6 +628,33 @@ func (h *APIHandler) ForwardMessage(w http.ResponseWriter, r *http.Request) {
 			Type:    "message.new",
 			Payload: newMsg,
 		})
+
+		senderName := ""
+		if sender != nil {
+			senderName = sender.DisplayName
+			if senderName == "" {
+				senderName = sender.Username
+			}
+		}
+		chatName := ""
+		if chat, err := h.repo.GetByID(r.Context(), req.ChatID); err == nil {
+			chatName = chat.Name
+		}
+		content := msg.Content
+		if len(content) > 200 {
+			content = content[:200] + "..."
+		}
+		for _, uid := range userIDs {
+			if uid == userID {
+				continue
+			}
+			h.fcm.SendMessageNotification(r.Context(), h.repo.db, uid, &fcm.MessageNotification{
+				SenderName: senderName,
+				ChatName:   chatName,
+				Content:    content,
+				ChatID:     req.ChatID,
+			})
+		}
 	}
 
 	shared.WriteJSON(w, http.StatusCreated, newMsg)

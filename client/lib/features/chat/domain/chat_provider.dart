@@ -166,8 +166,9 @@ class ChatState {
 class ChatNotifier extends StateNotifier<ChatState> {
   final ChatRepository _repository;
   final WsClient _wsClient;
+  final String currentUserId;
 
-  ChatNotifier(this._repository, this._wsClient) : super(const ChatState()) {
+  ChatNotifier(this._repository, this._wsClient, this.currentUserId) : super(const ChatState()) {
     _wsClient.onMessage = _handleWsMessage;
   }
 
@@ -242,8 +243,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _addMessage(ChatMessage msg) {
     if (msg.chatId == state.activeChatId) {
       state = state.copyWith(messages: [...state.messages, msg]);
-    } else {
-      // Increment unread count for non-active chat
+    } else if (msg.senderId != currentUserId) {
       final updatedChats = state.chats.map((chat) {
         if (chat.id == msg.chatId) {
           return Chat(
@@ -379,6 +379,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           createdAt: chat.createdAt,
           updatedAt: DateTime.now(),
           lastMessage: msg,
+          unreadCount: 0,
         );
       }
       return chat;
@@ -456,5 +457,6 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   return ChatNotifier(
     ref.read(chatRepositoryProvider),
     ref.read(wsClientProvider),
+    ref.read(authProvider).user?.id ?? '',
   );
 });

@@ -56,7 +56,7 @@ func main() {
 	go chatHub.Run()
 	signalHub := webrtc.NewSignalHub()
 	fcmService := fcm.NewService(cfg.FCMCredentials)
-	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub)
+	chatAPI := chat.NewAPIHandler(chatRepo, userRepo, chatHub, fcmService)
 	chatWS := chat.NewHandler(chatRepo, chatHub, signalHub, fcmService, userRepo)
 	uploadBaseURL := cfg.UploadBaseURL
 	if uploadBaseURL == "" {

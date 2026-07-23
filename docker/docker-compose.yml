@@ -38,10 +38,13 @@ services:
       SERVER_PORT: ${SERVER_PORT:-8080}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       UPLOAD_DIR: /data/uploads
+      UPLOAD_BASE_URL: http://192.168.1.18:8080
+      FCM_CREDENTIALS: /app/service-account.json
     ports:
       - "8080:8080"
     volumes:
       - uploads_data:/data/uploads
+      - ../server/service-account.json:/app/service-account.json:ro
 
 volumes:
   mariadb_data:
