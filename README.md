@@ -73,27 +73,47 @@ go test ./...
 
 ## Развёртывание на боевом сервере
 
-Один скрипт — Ubuntu/Debian + MariaDB + Apache2:
+Один скрипт — Ubuntu/Debian:
 
 ```bash
 git clone https://github.com/BlkDem/uphone.git
 cd uphone
 
-# По IP (без HTTPS)
+# Полный деплой (сервер + клиент + Apache)
 sudo bash deploy/deploy.sh
+
+# Только сервер (без Flutter и Apache)
+sudo bash deploy/deploy.sh --server-only
+
+# Только сервер без MinIO
+sudo bash deploy/deploy.sh --server-only --no-minio
 
 # С доменом и HTTPS (Let's Encrypt)
 sudo bash deploy/deploy.sh --domain=chat.example.com
 ```
 
 Скрипт автоматически:
-- Устанавливает Go, Flutter, MariaDB, Apache2, MinIO (объектное хранилище)
+- Устанавливает Go, Flutter (опционально), MariaDB (опционально), Apache2 (опционально), MinIO (опционально)
 - Создаёт базу данных и пользователя
 - Собирает Go сервер и Flutter web-клиент
 - Настраивает systemd сервис и Apache2 (reverse proxy + WebSocket)
 - Генерирует JWT секрет
 - При `--domain` — получает SSL-сертификат Let's Encrypt, настраивает HTTPS + auto-renewal
-- MinIO включён по умолчанию (отключить: `USE_MINIO=false`)
+- MinIO включён по умолчанию (отключить: `--no-minio`)
+
+### Флаги деплоя
+
+| Флаг | Описание |
+|------|----------|
+| `--server-only` | Только сервер: Go + MariaDB + systemd (без Flutter, без Apache) |
+| `--skip-flutter` | Не ставить Flutter SDK (подразумевает `--skip-flutter-build`) |
+| `--skip-flutter-build` | Не собирать Flutter web-клиент (SDK ставится) |
+| `--skip-apache` | Не настраивать Apache2 |
+| `--skip-db` | Не устанавливать/настраивать MariaDB |
+| `--no-minio` | Отключить MinIO (локальная ФС для загрузок) |
+| `--minio-only` | Установить только MinIO |
+| `--domain=DOMAIN` | Включить HTTPS через Let's Encrypt |
+| `--help` | Показать справку |
 
 ### Конфигурация
 
@@ -144,6 +164,7 @@ cd /opt/uphone
 sudo bash deploy/deploy.sh                          # полный деплой
 sudo bash deploy/deploy.sh --skip-flutter-build     # без пересборки клиента
 sudo bash deploy/deploy.sh --domain=chat.example.com --skip-flutter-build  # с HTTPS
+sudo bash deploy/deploy.sh --server-only --no-minio  # только обновить сервер
 ```
 
 Если Flutter web клиент собран локально — скопируйте `client/build/web/` на сервер в `/var/www/uphone/` и запустите с `--skip-flutter-build`.
