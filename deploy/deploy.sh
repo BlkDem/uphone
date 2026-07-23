@@ -8,12 +8,14 @@ set -euo pipefail
 # Usage:
 #   sudo bash deploy.sh                        # Full deploy (server + web + Apache)
 #   sudo bash deploy.sh --server-only          # Server only (Go + MariaDB + systemd)
+#   sudo bash deploy.sh --web-only             # Web client only (Flutter + Apache)
 #   sudo bash deploy.sh --server-only --no-minio   # Server without MinIO
 #   sudo bash deploy.sh --skip-flutter-build   # Deploy everything except Flutter web build
 #   sudo bash deploy.sh --domain=chat.example.com  # With SSL + custom domain
 #
 # Flags:
 #   --server-only         Install only Go server, MariaDB, systemd (no Flutter, no Apache)
+#   --web-only            Install only Flutter web client + Apache (no Go, no MariaDB, no MinIO)
 #   --skip-flutter        Skip Flutter SDK installation (implies --skip-flutter-build)
 #   --skip-flutter-build  Skip Flutter web build only (Flutter SDK still installed)
 #   --skip-apache         Skip Apache2 configuration
@@ -37,6 +39,7 @@ FLUTTER_CHANNEL="stable"
 
 # Flags (defaults)
 SERVER_ONLY=false
+WEB_ONLY=false
 SKIP_FLUTTER=false
 SKIP_FLUTTER_BUILD=false
 SKIP_APACHE=false
@@ -57,6 +60,7 @@ for arg in "$@"; do
             exit 0
             ;;
         --server-only)         SERVER_ONLY=true ;;
+        --web-only)            WEB_ONLY=true ;;
         --skip-flutter)        SKIP_FLUTTER=true; SKIP_FLUTTER_BUILD=true ;;
         --skip-flutter-build)  SKIP_FLUTTER_BUILD=true ;;
         --skip-apache)         SKIP_APACHE=true ;;
@@ -73,6 +77,12 @@ if [[ "${SERVER_ONLY}" == "true" ]]; then
     SKIP_FLUTTER=true
     SKIP_FLUTTER_BUILD=true
     SKIP_APACHE=true
+fi
+
+# --web-only implies several skips
+if [[ "${WEB_ONLY}" == "true" ]]; then
+    SKIP_DB=true
+    USE_MINIO=false
 fi
 
 RED='\033[0;31m'
@@ -92,6 +102,8 @@ log "Detected server IP: ${DETECTED_IP}"
 
 if [[ "${SERVER_ONLY}" == "true" ]]; then
     log "Mode: SERVER ONLY (Go + MariaDB + MinIO + systemd)"
+elif [[ "${WEB_ONLY}" == "true" ]]; then
+    log "Mode: WEB ONLY (Flutter + Apache)"
 elif [[ "${MINIO_ONLY}" == "true" ]]; then
     log "Mode: MINIO ONLY"
 fi
@@ -118,18 +130,22 @@ if [[ "${SKIP_APACHE}" != "true" ]]; then
     a2enmod proxy proxy_http proxy_wstunnel rewrite headers -qq
 fi
 
-# ---- 2. Go ----
-if ! command -v go &>/dev/null || [[ "$(go version 2>/dev/null | grep -oP 'go\d+\.\d+')" != "go${GO_VERSION%.*}" ]]; then
-    log "Installing Go ${GO_VERSION}..."
-    cd /tmp
-    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O go.tar.gz
-    rm -rf /usr/local/go
-    tar -C /usr/local -xzf go.tar.gz
-    rm go.tar.gz
-    export PATH="/usr/local/go/bin:$PATH"
-    echo 'export PATH="/usr/local/go/bin:$PATH"' > /etc/profile.d/golang.sh
+# ---- 2. Go (skip if --web-only) ----
+if [[ "${WEB_ONLY}" != "true" ]]; then
+    if ! command -v go &>/dev/null || [[ "$(go version 2>/dev/null | grep -oP 'go\d+\.\d+')" != "go${GO_VERSION%.*}" ]]; then
+        log "Installing Go ${GO_VERSION}..."
+        cd /tmp
+        wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O go.tar.gz
+        rm -rf /usr/local/go
+        tar -C /usr/local -xzf go.tar.gz
+        rm go.tar.gz
+        export PATH="/usr/local/go/bin:$PATH"
+        echo 'export PATH="/usr/local/go/bin:$PATH"' > /etc/profile.d/golang.sh
+    fi
+    log "Go: $(go version)"
+else
+    log "Skipping Go (--web-only)"
 fi
-log "Go: $(go version)"
 
 # ---- 3. Flutter (skip if --server-only or --skip-flutter) ----
 if [[ "${SKIP_FLUTTER}" != "true" ]]; then
@@ -261,11 +277,15 @@ else
     git clone --depth 1 -b master "${REPO_URL}" "${DEPLOY_DIR}"
 fi
 
-# ---- 6. Build Go server ----
-log "Building Go server..."
-cd "${DEPLOY_DIR}/server"
-export PATH="/usr/local/go/bin:$PATH"
-CGO_ENABLED=0 go build -o uphone-server ./cmd/server/
+# ---- 6. Build Go server (skip if --web-only) ----
+if [[ "${WEB_ONLY}" != "true" ]]; then
+    log "Building Go server..."
+    cd "${DEPLOY_DIR}/server"
+    export PATH="/usr/local/go/bin:$PATH"
+    CGO_ENABLED=0 go build -o uphone-server ./cmd/server/
+else
+    log "Skipping Go server build (--web-only)"
+fi
 
 # ---- 7. Build Flutter web client ----
 if [[ "${SKIP_FLUTTER_BUILD}" != "true" ]] && [[ "${SKIP_FLUTTER}" != "true" ]]; then
@@ -347,9 +367,10 @@ else
     warn "Firebase service account not found in repo, FCM push disabled"
 fi
 
-# ---- 9. Systemd service ----
-log "Installing systemd service..."
-cat > /etc/systemd/system/${APP_NAME}.service <<EOF
+# ---- 9. Systemd service (skip if --web-only) ----
+if [[ "${WEB_ONLY}" != "true" ]]; then
+    log "Installing systemd service..."
+    cat > /etc/systemd/system/${APP_NAME}.service <<EOF
 [Unit]
 Description=UPhone Messenger Server
 After=network.target mariadb.service
@@ -371,8 +392,11 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now ${APP_NAME}
+    systemctl daemon-reload
+    systemctl enable --now ${APP_NAME}
+else
+    log "Skipping systemd service (--web-only)"
+fi
 
 # ---- 10. Apache virtual host (skip if --skip-apache or --server-only) ----
 if [[ "${SKIP_APACHE}" != "true" ]]; then
@@ -567,8 +591,10 @@ if [[ "${SKIP_APACHE}" != "true" ]]; then
     echo "  Apache logs: /var/log/apache2/uphone_*.log"
 fi
 echo ""
-echo "  DB user:     ${DB_USER}"
-echo "  DB pass:     ${DB_PASS}"
+if [[ "${WEB_ONLY}" != "true" ]]; then
+    echo "  DB user:     ${DB_USER}"
+    echo "  DB pass:     ${DB_PASS}"
+fi
 if [[ "${USE_MINIO}" == "true" ]]; then
     echo "  MinIO:       http://${DISPLAY_HOST}:${MINIO_PORT}"
     echo "  MinIO console: http://${DISPLAY_HOST}:${MINIO_CONSOLE_PORT}"
@@ -577,6 +603,8 @@ fi
 echo ""
 if [[ "${SERVER_ONLY}" == "true" ]]; then
     echo "  To add web UI later: sudo bash deploy.sh --skip-db --no-minio"
+elif [[ "${WEB_ONLY}" == "true" ]]; then
+    echo "  To add server later: sudo bash deploy.sh --skip-flutter --skip-apache"
 else
     echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
 fi

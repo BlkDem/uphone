@@ -85,6 +85,9 @@ sudo bash deploy/deploy.sh
 # Только сервер (без Flutter и Apache)
 sudo bash deploy/deploy.sh --server-only
 
+# Только веб-клиент (Flutter + Apache, без Go и БД)
+sudo bash deploy/deploy.sh --web-only
+
 # Только сервер без MinIO
 sudo bash deploy/deploy.sh --server-only --no-minio
 
@@ -106,6 +109,7 @@ sudo bash deploy/deploy.sh --domain=chat.example.com
 | Флаг | Описание |
 |------|----------|
 | `--server-only` | Только сервер: Go + MariaDB + systemd (без Flutter, без Apache) |
+| `--web-only` | Только веб-клиент: Flutter + Apache (без Go, без MariaDB, без MinIO) |
 | `--skip-flutter` | Не ставить Flutter SDK (подразумевает `--skip-flutter-build`) |
 | `--skip-flutter-build` | Не собирать Flutter web-клиент (SDK ставится) |
 | `--skip-apache` | Не настраивать Apache2 |
