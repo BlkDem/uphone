@@ -419,15 +419,20 @@ class ContactTile extends StatelessWidget {
             CircleAvatar(
               radius: 24,
               backgroundColor: theme.colorScheme.primaryContainer,
-              child: Text(
-                contact.displayName.isNotEmpty
-                    ? contact.displayName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              backgroundImage: contact.avatarUrl != null && contact.avatarUrl!.isNotEmpty
+                  ? NetworkImage(contact.avatarUrl!)
+                  : null,
+              child: (contact.avatarUrl == null || contact.avatarUrl!.isEmpty)
+                  ? Text(
+                      contact.displayName.isNotEmpty
+                          ? contact.displayName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 12),
             Expanded(

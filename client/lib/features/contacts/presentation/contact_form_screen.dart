@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/shared/models/contact.dart';
 
@@ -19,6 +23,8 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
   late final TextEditingController _phoneController;
   late final TextEditingController _notesController;
   bool _isLoading = false;
+  Uint8List? _pendingAvatarBytes;
+  String? _avatarUrl;
 
   bool get _isEditing => widget.contact != null;
 
@@ -29,6 +35,7 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
     _emailController = TextEditingController(text: widget.contact?.email ?? '');
     _phoneController = TextEditingController(text: widget.contact?.phone ?? '');
     _notesController = TextEditingController(text: widget.contact?.notes ?? '');
+    _avatarUrl = widget.contact?.avatarUrl;
   }
 
   @override
@@ -57,6 +64,53 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: GestureDetector(
+                  onTap: _pickAvatar,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 48,
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        backgroundImage: _pendingAvatarBytes != null
+                            ? MemoryImage(_pendingAvatarBytes!)
+                            : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                                ? NetworkImage(_avatarUrl!)
+                                : null,
+                        child: (_pendingAvatarBytes == null &&
+                                (_avatarUrl == null || _avatarUrl!.isEmpty))
+                            ? Text(
+                                _nameController.text.isNotEmpty
+                                    ? _nameController.text[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.camera_alt,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
@@ -69,6 +123,7 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
                   }
                   return null;
                 },
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -119,10 +174,38 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
     );
   }
 
+  Future<void> _pickAvatar() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result != null && result.files.first.bytes != null) {
+      setState(() => _pendingAvatarBytes = result.files.first.bytes);
+    }
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
+
+    String? avatarUrl = _avatarUrl;
+
+    if (_pendingAvatarBytes != null) {
+      try {
+        final repo = ref.read(contactsRepositoryProvider);
+        final result = await repo.uploadFile('avatar.jpg', 'image/jpeg', _pendingAvatarBytes!);
+        avatarUrl = result['url'];
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload avatar: $e')),
+          );
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+    }
 
     final notifier = ref.read(contactsProvider.notifier);
     final email = _emailController.text.trim();
@@ -136,6 +219,7 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
         email: email.isNotEmpty ? email : null,
         phone: phone.isNotEmpty ? phone : null,
         notes: notes.isNotEmpty ? notes : null,
+        avatarUrl: avatarUrl,
       );
     } else {
       await notifier.createContact(
@@ -143,6 +227,7 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
         email: email.isNotEmpty ? email : null,
         phone: phone.isNotEmpty ? phone : null,
         notes: notes.isNotEmpty ? notes : null,
+        avatarUrl: avatarUrl,
       );
     }
 

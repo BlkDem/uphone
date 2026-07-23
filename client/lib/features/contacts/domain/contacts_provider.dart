@@ -27,12 +27,14 @@ class ContactsRepository {
     String? email,
     String? phone,
     String? notes,
+    String? avatarUrl,
   }) async {
     final response = await _dio.post('/api/v1/contacts', data: {
       'display_name': displayName,
       if (email != null) 'email': email,
       if (phone != null) 'phone': phone,
       if (notes != null) 'notes': notes,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
     });
     return Contact.fromJson(response.data);
   }
@@ -43,18 +45,33 @@ class ContactsRepository {
     String? email,
     String? phone,
     String? notes,
+    String? avatarUrl,
   }) async {
     final response = await _dio.put('/api/v1/contacts/$id', data: {
       if (displayName != null) 'display_name': displayName,
       if (email != null) 'email': email,
       if (phone != null) 'phone': phone,
       if (notes != null) 'notes': notes,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
     });
     return Contact.fromJson(response.data);
   }
 
   Future<void> deleteContact(String id) async {
     await _dio.delete('/api/v1/contacts/$id');
+  }
+
+  Future<Map<String, String>> uploadFile(String filename, String mimeType, Uint8List bytes) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    final response = await _dio.post('/api/v1/upload', data: formData);
+    final data = response.data;
+    return {'url': data['url'] as String, 'filename': data['filename'] as String};
   }
 
   Future<Uint8List> exportContacts({String format = 'vcard'}) async {
@@ -129,6 +146,7 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     String? email,
     String? phone,
     String? notes,
+    String? avatarUrl,
   }) async {
     try {
       final contact = await _repository.createContact(
@@ -136,6 +154,7 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
         email: email,
         phone: phone,
         notes: notes,
+        avatarUrl: avatarUrl,
       );
       state = state.copyWith(contacts: [...state.contacts, contact]);
       return contact;
@@ -151,10 +170,11 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     String? email,
     String? phone,
     String? notes,
+    String? avatarUrl,
   }) async {
     try {
       final contact = await _repository.updateContact(id,
-          displayName: displayName, email: email, phone: phone, notes: notes);
+          displayName: displayName, email: email, phone: phone, notes: notes, avatarUrl: avatarUrl);
       state = state.copyWith(
         contacts: state.contacts.map((c) => c.id == id ? contact : c).toList(),
       );

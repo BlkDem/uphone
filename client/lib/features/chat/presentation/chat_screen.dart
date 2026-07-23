@@ -10,6 +10,7 @@ import 'package:uphone_client/features/chat/presentation/widgets/forward_message
 import 'package:uphone_client/features/chat/presentation/media_viewer_screen.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
 import 'package:uphone_client/features/calls/presentation/call_screen.dart';
+import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -123,6 +124,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           : throw Exception('Chat not found'),
     );
 
+    final contactsState = ref.watch(contactsProvider);
+    final contactAvatar = currentChat.type == 'personal' && currentChat.avatarUrl.isEmpty
+        ? _findContactAvatar(contactsState.contacts, currentChat.name)
+        : null;
+
+    final displayAvatar = currentChat.avatarUrl.isNotEmpty
+        ? currentChat.avatarUrl
+        : contactAvatar;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -137,10 +147,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: currentChat.avatarUrl.isNotEmpty
-                  ? NetworkImage(currentChat.avatarUrl)
+              backgroundImage: displayAvatar != null && displayAvatar.isNotEmpty
+                  ? NetworkImage(displayAvatar)
                   : null,
-              child: currentChat.avatarUrl.isEmpty
+              child: (displayAvatar == null || displayAvatar.isEmpty)
                   ? Text(
                       currentChat.name.isNotEmpty
                           ? currentChat.name[0].toUpperCase()
@@ -435,5 +445,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         );
       }
     }
+  }
+
+  String? _findContactAvatar(List<dynamic> contacts, String chatName) {
+    for (final c in contacts) {
+      if (c.displayName == chatName &&
+          c.avatarUrl != null &&
+          c.avatarUrl!.isNotEmpty) {
+        return c.avatarUrl;
+      }
+    }
+    return null;
   }
 }
