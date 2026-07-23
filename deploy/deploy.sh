@@ -3,7 +3,25 @@ set -euo pipefail
 
 # ============================================================
 # UPhone Messenger - Production Deployment Script
-# Target: Ubuntu/Debian with MariaDB + Apache2
+# Target: Ubuntu/Debian
+#
+# Usage:
+#   sudo bash deploy.sh                        # Full deploy (server + web + Apache)
+#   sudo bash deploy.sh --server-only          # Server only (Go + MariaDB + systemd)
+#   sudo bash deploy.sh --server-only --no-minio   # Server without MinIO
+#   sudo bash deploy.sh --skip-flutter-build   # Deploy everything except Flutter web build
+#   sudo bash deploy.sh --domain=chat.example.com  # With SSL + custom domain
+#
+# Flags:
+#   --server-only         Install only Go server, MariaDB, systemd (no Flutter, no Apache)
+#   --skip-flutter        Skip Flutter SDK installation (implies --skip-flutter-build)
+#   --skip-flutter-build  Skip Flutter web build only (Flutter SDK still installed)
+#   --skip-apache         Skip Apache2 configuration
+#   --skip-db             Skip MariaDB installation/setup
+#   --no-minio            Disable MinIO (use local filesystem for uploads)
+#   --minio-only          Install only MinIO (useful for adding to existing setup)
+#   --domain=DOMAIN       Enable HTTPS via Let's Encrypt for DOMAIN
+#   --help                Show this help message
 # ============================================================
 
 APP_NAME="uphone"
@@ -16,18 +34,46 @@ DB_NAME="uphone"
 DB_USER="uphone"
 GO_VERSION="1.24.4"
 FLUTTER_CHANNEL="stable"
+
+# Flags (defaults)
+SERVER_ONLY=false
+SKIP_FLUTTER=false
 SKIP_FLUTTER_BUILD=false
-DEPLOYED_DOMAIN=""
+SKIP_APACHE=false
+SKIP_DB=false
 USE_MINIO=true
+MINIO_ONLY=false
+DEPLOYED_DOMAIN=""
+
+# MinIO defaults
 MINIO_ROOT_USER="uphone_minio"
 MINIO_ROOT_PASS=""
 
+# ---- Parse arguments ----
 for arg in "$@"; do
     case "$arg" in
-        --skip-flutter-build) SKIP_FLUTTER_BUILD=true ;;
-        --domain=*)           DEPLOYED_DOMAIN="${arg#*=}" ;;
+        --help|-h)
+            sed -n '/^# Usage:/,/^# ====/p' "$0" | sed 's/^# //' | head -n -1
+            exit 0
+            ;;
+        --server-only)         SERVER_ONLY=true ;;
+        --skip-flutter)        SKIP_FLUTTER=true; SKIP_FLUTTER_BUILD=true ;;
+        --skip-flutter-build)  SKIP_FLUTTER_BUILD=true ;;
+        --skip-apache)         SKIP_APACHE=true ;;
+        --skip-db)             SKIP_DB=true ;;
+        --no-minio)            USE_MINIO=false ;;
+        --minio-only)          MINIO_ONLY=true ;;
+        --domain=*)            DEPLOYED_DOMAIN="${arg#*=}" ;;
+        *) echo "Unknown option: $arg"; echo "Run with --help for usage"; exit 1 ;;
     esac
 done
+
+# --server-only implies several skips
+if [[ "${SERVER_ONLY}" == "true" ]]; then
+    SKIP_FLUTTER=true
+    SKIP_FLUTTER_BUILD=true
+    SKIP_APACHE=true
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,18 +90,33 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 DETECTED_IP=$(hostname -I | awk '{print $1}')
 log "Detected server IP: ${DETECTED_IP}"
 
-# ---- 1. System packages ----
+if [[ "${SERVER_ONLY}" == "true" ]]; then
+    log "Mode: SERVER ONLY (Go + MariaDB + MinIO + systemd)"
+elif [[ "${MINIO_ONLY}" == "true" ]]; then
+    log "Mode: MINIO ONLY"
+fi
+
+# ---- 1. System packages (minimal set) ----
 log "Installing system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq \
-    git curl wget unzip \
-    mariadb-server mariadb-client \
-    apache2 libapache2-mod-proxy-html libproxy-mod-proxy-wstunnel \
-    build-essential
+
+PKGS="git curl wget unzip build-essential"
+
+if [[ "${SKIP_DB}" != "true" ]]; then
+    PKGS="${PKGS} mariadb-server mariadb-client"
+fi
+
+if [[ "${SKIP_APACHE}" != "true" ]]; then
+    PKGS="${PKGS} apache2 libapache2-mod-proxy-html libproxy-mod-proxy-wstunnel"
+fi
+
+apt-get install -y -qq ${PKGS}
 
 # Enable Apache modules
-a2enmod proxy proxy_http proxy_wstunnel rewrite headers -qq
+if [[ "${SKIP_APACHE}" != "true" ]]; then
+    a2enmod proxy proxy_http proxy_wstunnel rewrite headers -qq
+fi
 
 # ---- 2. Go ----
 if ! command -v go &>/dev/null || [[ "$(go version 2>/dev/null | grep -oP 'go\d+\.\d+')" != "go${GO_VERSION%.*}" ]]; then
@@ -70,35 +131,43 @@ if ! command -v go &>/dev/null || [[ "$(go version 2>/dev/null | grep -oP 'go\d+
 fi
 log "Go: $(go version)"
 
-# ---- 3. Flutter ----
-if ! command -v flutter &>/dev/null; then
-    log "Installing Flutter..."
-    cd /opt
-    git clone -b ${FLUTTER_CHANNEL} --depth 1 https://github.com/flutter/flutter.git flutter-sdk
+# ---- 3. Flutter (skip if --server-only or --skip-flutter) ----
+if [[ "${SKIP_FLUTTER}" != "true" ]]; then
+    if ! command -v flutter &>/dev/null; then
+        log "Installing Flutter..."
+        cd /opt
+        git clone -b ${FLUTTER_CHANNEL} --depth 1 https://github.com/flutter/flutter.git flutter-sdk
+        export PATH="/opt/flutter-sdk/bin:$PATH"
+        echo 'export PATH="/opt/flutter-sdk/bin:$PATH"' > /etc/profile.d/flutter.sh
+        flutter precache --web
+    else
+        log "Flutter already installed"
+    fi
     export PATH="/opt/flutter-sdk/bin:$PATH"
-    echo 'export PATH="/opt/flutter-sdk/bin:$PATH"' > /etc/profile.d/flutter.sh
-    flutter precache --web
 else
-    log "Flutter already installed"
+    log "Skipping Flutter (--skip-flutter / --server-only)"
 fi
-export PATH="/opt/flutter-sdk/bin:$PATH"
 
-# ---- 4. MariaDB ----
-log "Configuring MariaDB..."
-systemctl enable --now mariadb
+# ---- 4. MariaDB (skip if --skip-db) ----
+if [[ "${SKIP_DB}" != "true" ]]; then
+    log "Configuring MariaDB..."
+    systemctl enable --now mariadb
 
-# Generate random password if not set
-DB_PASS="${DB_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)}"
+    DB_PASS="${DB_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)}"
 
-mysql -u root <<-EOSQL
-    CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASS}';
-    CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
-    GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
-    GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
-    FLUSH PRIVILEGES;
+    mysql -u root <<-EOSQL
+        CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASS}';
+        CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
+        GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
+        GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
+        FLUSH PRIVILEGES;
 EOSQL
-log "Database ready. User: ${DB_USER}, Pass: ${DB_PASS}"
+    log "Database ready. User: ${DB_USER}, Pass: ${DB_PASS}"
+else
+    log "Skipping MariaDB (--skip-db)"
+    DB_PASS="${DB_PASSWORD:-}"
+fi
 
 # ---- 4b. MinIO (object storage) ----
 MINIO_DATA_DIR="${DATA_DIR}/minio"
@@ -140,7 +209,6 @@ EOF
     systemctl daemon-reload
     systemctl enable --now minio
 
-    # Wait for MinIO to start
     sleep 2
 
     # Install mc (MinIO client) for bucket management
@@ -157,9 +225,30 @@ else
     log "MinIO disabled, using local filesystem for uploads"
 fi
 
+# If --minio-only, stop here
+if [[ "${MINIO_ONLY}" == "true" ]]; then
+    echo ""
+    echo "============================================"
+    echo -e "${GREEN}  MinIO installed successfully!${NC}"
+    echo "============================================"
+    echo ""
+    echo "  Endpoint:      http://127.0.0.1:${MINIO_PORT}"
+    echo "  Console:       http://127.0.0.1:${MINIO_CONSOLE_PORT}"
+    echo "  Root user:     ${MINIO_ROOT_USER}"
+    echo "  Root password: ${MINIO_ROOT_PASS}"
+    echo "  Bucket:        ${MINIO_BUCKET}"
+    echo "  Data dir:      ${MINIO_DATA_DIR}"
+    echo ""
+    echo "  Service: systemctl status minio"
+    echo "  Logs:    journalctl -u minio -f"
+    echo "============================================"
+    exit 0
+fi
+
 # ---- 5. Deploy application ----
 log "Deploying application..."
-mkdir -p "${DEPLOY_DIR}" "${DATA_DIR}/uploads" "${CONF_DIR}" "${WEB_DIR}"
+mkdir -p "${DEPLOY_DIR}" "${DATA_DIR}/uploads" "${CONF_DIR}"
+[[ "${SKIP_APACHE}" != "true" ]] && mkdir -p "${WEB_DIR}"
 
 if [[ -d "${DEPLOY_DIR}/.git" ]]; then
     log "Pulling latest changes..."
@@ -179,18 +268,13 @@ export PATH="/usr/local/go/bin:$PATH"
 CGO_ENABLED=0 go build -o uphone-server ./cmd/server/
 
 # ---- 7. Build Flutter web client ----
-if [[ "${SKIP_FLUTTER_BUILD}" == "true" ]]; then
-    log "Skipping Flutter build (--skip-flutter-build)"
-    if [[ ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
-        warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
-    fi
-else
+if [[ "${SKIP_FLUTTER_BUILD}" != "true" ]] && [[ "${SKIP_FLUTTER}" != "true" ]]; then
     log "Building Flutter web client..."
     cd "${DEPLOY_DIR}/client"
     export PATH="/opt/flutter-sdk/bin:$PATH"
     flutter pub get
 
-    BUILD_HOST="${DEPLOYED_IP:-$DETECTED_IP}"
+    BUILD_HOST="${DETECTED_IP}"
     BUILD_SCHEME="http"
     BUILD_WS="ws"
     if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
@@ -205,12 +289,17 @@ else
 
     rm -rf "${WEB_DIR:?}"/*
     cp -r build/web/* "${WEB_DIR}/"
+else
+    log "Skipping Flutter web build"
+    if [[ "${SKIP_APACHE}" != "true" ]] && [[ ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
+        warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
+    fi
 fi
 
 # ---- 8. Configuration ----
 JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
 
-UPLOAD_BASE_URL="http://${DEPLOYED_IP:-$DETECTED_IP}"
+UPLOAD_BASE_URL="http://${DETECTED_IP}"
 if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
     UPLOAD_BASE_URL="https://${DEPLOYED_DOMAIN}"
 fi
@@ -285,13 +374,14 @@ EOF
 systemctl daemon-reload
 systemctl enable --now ${APP_NAME}
 
-# ---- 10. Apache virtual host ----
-log "Configuring Apache2..."
+# ---- 10. Apache virtual host (skip if --skip-apache or --server-only) ----
+if [[ "${SKIP_APACHE}" != "true" ]]; then
+    log "Configuring Apache2..."
 
-SERVER_NAME="${DEPLOYED_IP:-$DETECTED_IP}"
+    SERVER_NAME="${DETECTED_IP}"
 
-# Generate HTTP config
-cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
+    # Generate HTTP config
+    cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
 <VirtualHost *:80>
     ServerName ${SERVER_NAME}
 
@@ -336,31 +426,29 @@ cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
 </VirtualHost>
 EOF
 
-# ---- 10b. Let's Encrypt SSL (optional) ----
-if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
-    log "Setting up HTTPS for ${DEPLOYED_DOMAIN}..."
+    # ---- 10b. Let's Encrypt SSL (optional) ----
+    if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+        log "Setting up HTTPS for ${DEPLOYED_DOMAIN}..."
 
-    apt-get install -y -qq certbot python3-certbot-apache
+        apt-get install -y -qq certbot python3-certbot-apache
 
-    # First get cert via standalone (needs port 80 free)
-    if [[ ! -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
-        log "Obtaining SSL certificate for ${DEPLOYED_DOMAIN}..."
-        systemctl stop apache2 2>/dev/null || true
-        certbot certonly --standalone -d "${DEPLOYED_DOMAIN}" \
-            --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
-            --preferred-challenges http || {
-            warn "certbot standalone failed, trying with apache plugin..."
-            systemctl start apache2 2>/dev/null || true
-            certbot --apache -d "${DEPLOYED_DOMAIN}" \
+        if [[ ! -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
+            log "Obtaining SSL certificate for ${DEPLOYED_DOMAIN}..."
+            systemctl stop apache2 2>/dev/null || true
+            certbot certonly --standalone -d "${DEPLOYED_DOMAIN}" \
                 --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
-                --redirect --hsts || true
-        }
-        systemctl start apache2 2>/dev/null || true
-    fi
+                --preferred-challenges http || {
+                warn "certbot standalone failed, trying with apache plugin..."
+                systemctl start apache2 2>/dev/null || true
+                certbot --apache -d "${DEPLOYED_DOMAIN}" \
+                    --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
+                    --redirect --hsts || true
+            }
+            systemctl start apache2 2>/dev/null || true
+        fi
 
-    # Add SSL VirtualHost
-    if [[ -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
-        cat > /etc/apache2/sites-available/${APP_NAME}-ssl.conf <<SSLEOF
+        if [[ -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
+            cat > /etc/apache2/sites-available/${APP_NAME}-ssl.conf <<SSLEOF
 <VirtualHost *:443>
     ServerName ${DEPLOYED_DOMAIN}
 
@@ -409,44 +497,49 @@ if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
 </VirtualHost>
 SSLEOF
 
-        a2enmod ssl -qq
-        a2ensite ${APP_NAME}-ssl.conf -qq
+            a2enmod ssl -qq
+            a2ensite ${APP_NAME}-ssl.conf -qq
 
-        # Add HTTP -> HTTPS redirect
-        cat > /etc/apache2/sites-available/${APP_NAME}.conf <<REDIR
+            cat > /etc/apache2/sites-available/${APP_NAME}.conf <<REDIR
 <VirtualHost *:80>
     ServerName ${DEPLOYED_DOMAIN}
     Redirect permanent / https://${DEPLOYED_DOMAIN}/
 </VirtualHost>
 REDIR
 
-        # Auto-renewal cron
-        if ! crontab -l 2>/dev/null | grep -q certbot; then
-            (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | crontab -
-            log "Certbot auto-renewal cron job added"
+            if ! crontab -l 2>/dev/null | grep -q certbot; then
+                (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | crontab -
+                log "Certbot auto-renewal cron job added"
+            fi
+
+            log "SSL configured for ${DEPLOYED_DOMAIN}"
+        else
+            warn "SSL certificate not found, HTTP-only mode"
         fi
-
-        log "SSL configured for ${DEPLOYED_DOMAIN}"
-    else
-        warn "SSL certificate not found, HTTP-only mode"
     fi
-fi
 
-a2dissite 000-default.conf -qq 2>/dev/null || true
-a2ensite ${APP_NAME}.conf -qq
-systemctl reload apache2
+    a2dissite 000-default.conf -qq 2>/dev/null || true
+    a2ensite ${APP_NAME}.conf -qq
+    systemctl reload apache2
+else
+    log "Skipping Apache (--skip-apache / --server-only)"
+fi
 
 # ---- 11. Firewall ----
 if command -v ufw &>/dev/null; then
     log "Opening firewall ports..."
-    ufw allow 80/tcp comment "HTTP" >/dev/null 2>&1 || true
-    ufw allow 443/tcp comment "HTTPS" >/dev/null 2>&1 || true
+    ufw allow 22/tcp comment "SSH" >/dev/null 2>&1 || true
+    ufw allow 8080/tcp comment "UPhone API" >/dev/null 2>&1 || true
+    if [[ "${SKIP_APACHE}" != "true" ]]; then
+        ufw allow 80/tcp comment "HTTP" >/dev/null 2>&1 || true
+        ufw allow 443/tcp comment "HTTPS" >/dev/null 2>&1 || true
+    fi
 fi
 
 # ---- Done ----
 SCHEME="http"
 WS_SCHEME="ws"
-DISPLAY_HOST="${DEPLOYED_IP:-$DETECTED_IP}"
+DISPLAY_HOST="${DETECTED_IP}"
 if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
     SCHEME="https"
     WS_SCHEME="wss"
@@ -458,14 +551,21 @@ echo "============================================"
 echo -e "${GREEN}  UPhone deployed successfully!${NC}"
 echo "============================================"
 echo ""
-echo "  Web client:  ${SCHEME}://${DISPLAY_HOST}"
-echo "  Admin panel: ${SCHEME}://${DISPLAY_HOST}/admin"
-echo "  API:         ${SCHEME}://${DISPLAY_HOST}/api/v1"
-echo "  WebSocket:   ${WS_SCHEME}://${DISPLAY_HOST}/ws"
+if [[ "${SKIP_APACHE}" != "true" ]]; then
+    echo "  Web client:  ${SCHEME}://${DISPLAY_HOST}"
+    echo "  Admin panel: ${SCHEME}://${DISPLAY_HOST}/admin"
+    echo "  API:         ${SCHEME}://${DISPLAY_HOST}/api/v1"
+    echo "  WebSocket:   ${WS_SCHEME}://${DISPLAY_HOST}/ws"
+else
+    echo "  API:         http://${DETECTED_IP}:8080/api/v1"
+    echo "  WebSocket:   ws://${DETECTED_IP}:8080/ws"
+fi
 echo ""
 echo "  Config:      ${CONF_DIR}/uphone.env"
 echo "  Logs:        journalctl -u ${APP_NAME} -f"
-echo "  Apache logs: /var/log/apache2/uphone_*.log"
+if [[ "${SKIP_APACHE}" != "true" ]]; then
+    echo "  Apache logs: /var/log/apache2/uphone_*.log"
+fi
 echo ""
 echo "  DB user:     ${DB_USER}"
 echo "  DB pass:     ${DB_PASS}"
@@ -475,5 +575,9 @@ if [[ "${USE_MINIO}" == "true" ]]; then
     echo "  MinIO bucket:  ${MINIO_BUCKET}"
 fi
 echo ""
-echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
+if [[ "${SERVER_ONLY}" == "true" ]]; then
+    echo "  To add web UI later: sudo bash deploy.sh --skip-db --no-minio"
+else
+    echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
+fi
 echo "============================================"
