@@ -75,12 +75,12 @@ class MessageBubble extends StatelessWidget {
                 maxWidth: MediaQuery.of(context).size.width * 0.7,
               ),
               margin: EdgeInsets.only(
-                left: isMe ? 48 : 8,
-                right: isMe ? 8 : 48,
-                top: 2,
-                bottom: 2,
+                left: isMe ? 36 : 4,
+                right: isMe ? 4 : 36,
+                top: 1,
+                bottom: 1,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: isMe
                     ? colorScheme.primaryContainer
@@ -129,6 +129,17 @@ class MessageBubble extends StatelessWidget {
                           color: colorScheme.onSurfaceVariant,
                         ),
                       ],
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 20,
+                          child: Icon(
+                            Icons.done_all,
+                            size: 12,
+                            color: colorScheme.onPrimaryContainer.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -167,7 +178,7 @@ class MessageBubble extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
-                      const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                       Text(
                         'Failed to load',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
