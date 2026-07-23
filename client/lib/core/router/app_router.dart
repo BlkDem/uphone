@@ -10,6 +10,7 @@ import 'package:uphone_client/features/chat/presentation/chat_info_screen.dart';
 import 'package:uphone_client/features/chat/presentation/create_chat_screen.dart';
 import 'package:uphone_client/features/chat/presentation/media_gallery_screen.dart';
 import 'package:uphone_client/features/contacts/presentation/contacts_list_screen.dart';
+import 'package:uphone_client/features/settings/presentation/settings_screen.dart';
 
 
 final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
@@ -74,6 +75,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => MediaGalleryScreen(
           chatId: state.pathParameters['chatId']!,
         ),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
 
     ],

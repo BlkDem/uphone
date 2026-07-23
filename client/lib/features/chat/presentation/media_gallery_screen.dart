@@ -65,15 +65,13 @@ class _MediaGalleryScreenState extends ConsumerState<MediaGalleryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Media'),
+        title: Text('Media (${_mediaMessages.length})'),
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -121,16 +119,24 @@ class _MediaGalleryScreenState extends ConsumerState<MediaGalleryScreen>
   }
 
   void _openViewer(int index) {
-    final images = _mediaMessages
-        .where((m) => m.type == 'image' && m.fileUrl.isNotEmpty)
+    final msg = _mediaMessages[index];
+    // Only images and videos can be viewed in the viewer
+    if (msg.type != 'image' && msg.type != 'video') return;
+    if (msg.fileUrl.isEmpty) return;
+
+    // Pass all viewable media (images + videos) to the viewer
+    final viewableMedia = _mediaMessages
+        .where((m) =>
+            (m.type == 'image' || m.type == 'video') &&
+            m.fileUrl.isNotEmpty)
         .toList();
-    final initialIndex = images.indexOf(_mediaMessages[index]);
+    final initialIndex = viewableMedia.indexOf(msg);
     if (initialIndex < 0) return;
 
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MediaViewerScreen(
-          messages: images,
+          messages: viewableMedia,
           initialIndex: initialIndex,
           chatId: widget.chatId,
         ),
@@ -171,6 +177,51 @@ class _MediaTile extends StatelessWidget {
       );
     }
 
+    if (message.type == 'video') {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Video icon background
+              Center(
+                child: Icon(
+                  Icons.play_circle_fill,
+                  size: 40,
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                ),
+              ),
+              // Filename at bottom
+              Positioned(
+                bottom: 4,
+                left: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    message.fileUrl.split('/').last,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -205,8 +256,6 @@ class _MediaTile extends StatelessWidget {
 
   IconData _getIcon() {
     switch (message.type) {
-      case 'video':
-        return Icons.video_file;
       case 'voice':
         return Icons.mic;
       case 'file':

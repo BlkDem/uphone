@@ -44,6 +44,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                   ref.read(authProvider.notifier).logout();
                   context.go('/login');
                   break;
+                case 'settings':
+                  context.push('/settings');
+                  break;
               }
             },
             itemBuilder: (context) => [
@@ -61,6 +64,13 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               ),
               const PopupMenuDivider(),
               const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings),
+                  title: Text('Settings'),
+                ),
+              ),
               const PopupMenuItem(
                 value: 'logout',
                 child: ListTile(
