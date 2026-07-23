@@ -213,9 +213,32 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case 'message.read':
         if (payload is Map<String, dynamic>) {
           final chatId = payload['chatId'] as String?;
-          final msgId = payload['messageId'] as String?;
-          if (chatId != null && msgId != null) {
-            // Decrement unread count for this chat
+          if (chatId != null) {
+            final updatedMessages = state.messages.map((m) {
+              if (m.chatId == chatId &&
+                  m.senderId == currentUserId &&
+                  !m.isDeleted &&
+                  m.status != 'read') {
+                return ChatMessage(
+                  id: m.id,
+                  chatId: m.chatId,
+                  senderId: m.senderId,
+                  content: m.content,
+                  type: m.type,
+                  fileUrl: m.fileUrl,
+                  replyTo: m.replyTo,
+                  isPinned: m.isPinned,
+                  isDeleted: m.isDeleted,
+                  status: 'read',
+                  createdAt: m.createdAt,
+                  updatedAt: m.updatedAt,
+                  sender: m.sender,
+                );
+              }
+              return m;
+            }).toList();
+            state = state.copyWith(messages: updatedMessages);
+
             final updatedChats = state.chats.map((chat) {
               if (chat.id == chatId && chat.unreadCount > 0) {
                 return Chat(
@@ -243,6 +266,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _addMessage(ChatMessage msg) {
     if (msg.chatId == state.activeChatId) {
       state = state.copyWith(messages: [...state.messages, msg]);
+      if (msg.senderId != currentUserId) {
+        markAsRead(msg.chatId);
+      }
     } else if (msg.senderId != currentUserId) {
       final updatedChats = state.chats.map((chat) {
         if (chat.id == msg.chatId) {
@@ -347,7 +373,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> closeChat() async {
+    final chatId = state.activeChatId;
+    final msgs = state.messages;
     state = state.copyWith(activeChatId: null, messages: []);
+    if (chatId != null && msgs.isNotEmpty) {
+      final lastMsg = msgs.last;
+      await markAsRead(chatId);
+    }
   }
 
   Future<void> sendMessage(String chatId, String content) async {

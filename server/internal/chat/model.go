@@ -52,6 +52,7 @@ type Message struct {
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	IsPinned  bool      `json:"is_pinned"`
 	IsDeleted bool      `json:"is_deleted"`
+	Status    string    `json:"status,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Sender    *Sender   `json:"sender,omitempty"`

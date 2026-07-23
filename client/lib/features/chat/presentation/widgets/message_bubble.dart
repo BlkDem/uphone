@@ -131,14 +131,7 @@ class MessageBubble extends StatelessWidget {
                       ],
                       if (isMe) ...[
                         const SizedBox(width: 4),
-                        SizedBox(
-                          width: 20,
-                          child: Icon(
-                            Icons.done_all,
-                            size: 12,
-                            color: colorScheme.onPrimaryContainer.withValues(alpha: 0.5),
-                          ),
-                        ),
+                        _buildStatusIcon(message.status, colorScheme),
                       ],
                     ],
                   ),
@@ -321,6 +314,35 @@ class MessageBubble extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusIcon(String status, ColorScheme colorScheme) {
+    final Color color;
+    final IconData icon;
+
+    switch (status) {
+      case 'read':
+        color = colorScheme.primary;
+        icon = Icons.done_all;
+        break;
+      case 'delivered':
+        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.5);
+        icon = Icons.done_all;
+        break;
+      case 'sent':
+        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.5);
+        icon = Icons.done;
+        break;
+      default:
+        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.3);
+        icon = Icons.done;
+        break;
+    }
+
+    return SizedBox(
+      width: 20,
+      child: Icon(icon, size: 12, color: color),
     );
   }
 
