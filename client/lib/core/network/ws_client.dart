@@ -154,7 +154,18 @@ class WsClient {
     _channel = null;
   }
 
+  void disconnectForBackground() {
+    _reconnectTimer?.cancel();
+    _pingTimer?.cancel();
+    _channel?.sink.close();
+    _channel = null;
+  }
+
+  bool get isForegroundConnected => _channel != null;
+
   bool get isConnected => _channel != null;
+
+  String? get currentToken => _token;
 
   void reconnect() {
     if (_token == null || _token!.isEmpty) return;

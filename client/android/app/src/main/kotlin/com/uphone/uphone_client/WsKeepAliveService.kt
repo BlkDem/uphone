@@ -125,7 +125,7 @@ class WsKeepAliveService : Service() {
 
                 if (wsUrl == newUrl && token == newToken && (isConnected || isConnecting)) {
                     debugLog(this, "Already connected with same params, skipping")
-                    return START_STICKY
+                    return START_NOT_STICKY
                 }
 
                 wsUrl = newUrl
@@ -142,8 +142,13 @@ class WsKeepAliveService : Service() {
                 tryStopForeground()
                 stopSelf()
             }
+            else -> {
+                debugLog(this, "onStartCommand null/unknown action, stopping")
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startForegroundWithNotification() {

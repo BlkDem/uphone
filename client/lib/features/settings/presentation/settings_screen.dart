@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
+import 'package:uphone_client/core/network/battery_optimization.dart';
 import 'package:uphone_client/main.dart';
 import 'package:uphone_client/features/settings/presentation/profile_screen.dart';
 
@@ -173,6 +175,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+          if (!kIsWeb) ...[
+            const Divider(),
+            _SectionHeader(title: 'Battery', theme: theme),
+            ListTile(
+              leading: const Icon(Icons.battery_saver),
+              title: const Text('Battery Optimization'),
+              subtitle: const Text('Exclude from battery optimization for reliable call notifications'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => BatteryOptimization.requestExemption(context),
+            ),
+          ],
         ],
       ),
     );

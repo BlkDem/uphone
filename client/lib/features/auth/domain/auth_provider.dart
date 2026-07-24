@@ -181,7 +181,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       print('[WsBridge] Token refreshed, updating native service');
       WsServiceBridge.start(ServerConfig.instance.wsUrl, newToken);
     };
-    WsServiceBridge.start(ServerConfig.instance.wsUrl, accessToken);
   }
 
   Future<User?> updateProfile({String? displayName, String? avatarUrl}) async {
