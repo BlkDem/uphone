@@ -86,10 +86,10 @@ class MessageBubble extends StatelessWidget {
                     ? colorScheme.primaryContainer
                     : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(9),
-                  topRight: const Radius.circular(9),
-                  bottomLeft: Radius.circular(isMe ? 9 : 2),
-                  bottomRight: Radius.circular(isMe ? 2 : 9),
+                  topLeft: const Radius.circular(12),
+                  topRight: const Radius.circular(12),
+                  bottomLeft: Radius.circular(isMe ? 12 : 2),
+                  bottomRight: Radius.circular(isMe ? 2 : 12),
                 ),
               ),
               child: Column(
