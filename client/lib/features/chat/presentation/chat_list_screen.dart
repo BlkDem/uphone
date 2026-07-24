@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,15 +27,40 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final authState = ref.watch(authProvider);
     final contactsState = ref.watch(contactsProvider);
 
+    if (kIsWeb) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.forum_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Select a chat',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text('UPhone'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.people_outline),
-            tooltip: 'Contacts',
-            onPressed: () => context.go('/contacts'),
-          ),
+          if (!kIsWeb)
+            IconButton(
+              icon: const Icon(Icons.people_outline),
+              tooltip: 'Contacts',
+              onPressed: () => context.go('/contacts'),
+            ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {},
@@ -128,7 +154,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     );
                   },
                 ),
-      floatingActionButton: Column(
+      floatingActionButton: kIsWeb
+          ? null
+          : Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton.small(

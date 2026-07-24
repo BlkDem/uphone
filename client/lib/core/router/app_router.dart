@@ -9,6 +9,7 @@ import 'package:uphone_client/features/chat/presentation/chat_screen.dart';
 import 'package:uphone_client/features/chat/presentation/chat_info_screen.dart';
 import 'package:uphone_client/features/chat/presentation/create_chat_screen.dart';
 import 'package:uphone_client/features/chat/presentation/media_gallery_screen.dart';
+import 'package:uphone_client/features/chat/presentation/web_shell_screen.dart';
 import 'package:uphone_client/features/contacts/presentation/contacts_list_screen.dart';
 import 'package:uphone_client/features/settings/presentation/settings_screen.dart';
 import 'package:uphone_client/features/settings/presentation/profile_screen.dart';
@@ -51,31 +52,36 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/contacts',
         builder: (context, state) => const ContactsListScreen(),
       ),
-      GoRoute(
-        path: '/chats',
-        builder: (context, state) => const ChatListScreen(),
-      ),
-      GoRoute(
-        path: '/chats/create',
-        builder: (context, state) => const CreateChatScreen(),
-      ),
-      GoRoute(
-        path: '/chats/:chatId',
-        builder: (context, state) => ChatScreen(
-          chatId: state.pathParameters['chatId']!,
-        ),
-      ),
-      GoRoute(
-        path: '/chats/:chatId/info',
-        builder: (context, state) => ChatInfoScreen(
-          chatId: state.pathParameters['chatId']!,
-        ),
-      ),
-      GoRoute(
-        path: '/chats/:chatId/gallery',
-        builder: (context, state) => MediaGalleryScreen(
-          chatId: state.pathParameters['chatId']!,
-        ),
+      ShellRoute(
+        builder: (context, state, child) => WebShellScreen(child: child),
+        routes: [
+          GoRoute(
+            path: '/chats',
+            builder: (context, state) => const ChatListScreen(),
+          ),
+          GoRoute(
+            path: '/chats/create',
+            builder: (context, state) => const CreateChatScreen(),
+          ),
+          GoRoute(
+            path: '/chats/:chatId',
+            builder: (context, state) => ChatScreen(
+              chatId: state.pathParameters['chatId']!,
+            ),
+          ),
+          GoRoute(
+            path: '/chats/:chatId/info',
+            builder: (context, state) => ChatInfoScreen(
+              chatId: state.pathParameters['chatId']!,
+            ),
+          ),
+          GoRoute(
+            path: '/chats/:chatId/gallery',
+            builder: (context, state) => MediaGalleryScreen(
+              chatId: state.pathParameters['chatId']!,
+            ),
+          ),
+        ],
       ),
       GoRoute(
         path: '/settings',
