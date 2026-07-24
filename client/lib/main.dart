@@ -11,6 +11,7 @@ import 'features/auth/domain/auth_provider.dart';
 import 'features/calls/presentation/incoming_call_listener.dart';
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => AppSettings.instance.themeMode);
+final chatFontSizeProvider = StateProvider<double>((ref) => AppSettings.instance.chatFontSize);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

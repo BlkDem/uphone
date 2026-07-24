@@ -49,4 +49,12 @@ class AuthRepository {
     });
     return AuthResponse.fromJson(response.data);
   }
+
+  Future<User> updateProfile({String? displayName, String? avatarUrl}) async {
+    final data = <String, dynamic>{};
+    if (displayName != null) data['display_name'] = displayName;
+    if (avatarUrl != null) data['avatar_url'] = avatarUrl;
+    final response = await _dio.put('/api/v1/users/me', data: data);
+    return User.fromJson(response.data);
+  }
 }

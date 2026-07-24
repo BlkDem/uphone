@@ -185,6 +185,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     WsServiceBridge.start(ServerConfig.instance.wsUrl, accessToken);
   }
 
+  Future<User?> updateProfile({String? displayName, String? avatarUrl}) async {
+    try {
+      final updatedUser = await _repository.updateProfile(
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+      );
+      state = state.copyWith(user: updatedUser);
+      return updatedUser;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _repository.logout();

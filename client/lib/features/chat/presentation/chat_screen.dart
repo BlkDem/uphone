@@ -34,6 +34,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.initState();
     Future.microtask(() {
       ref.read(chatProvider.notifier).openChat(widget.chatId);
+      ref.read(contactsProvider.notifier).loadContacts();
     });
   }
 
@@ -230,11 +231,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           (index == 0 ||
                               chatState.messages[index - 1].senderId != msg.senderId);
 
+                      final contactAvatars = <String, String>{};
+                      for (final c in contactsState.contacts) {
+                        if (c.avatarUrl != null && c.avatarUrl!.isNotEmpty) {
+                          contactAvatars[c.displayName] = c.avatarUrl!;
+                        }
+                      }
+
                       return MessageBubble(
                         key: index == _firstUnreadIndex ? _firstUnreadKey : null,
                         message: msg,
                         isMe: isMe,
                         showSender: showSender,
+                        contactAvatars: contactAvatars,
                         onEdit: isMe ? () => _startEdit(msg.id) : null,
                         onDelete: isMe ? () => _deleteMessage(msg.id) : null,
                         onReact: (emoji) => _addReaction(msg.id, emoji),

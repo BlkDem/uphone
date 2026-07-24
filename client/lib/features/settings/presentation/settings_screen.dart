@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
 import 'package:uphone_client/main.dart';
+import 'package:uphone_client/features/settings/presentation/profile_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -13,12 +14,14 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late int _slideshowInterval;
   late bool _slideshowAutoplay;
+  late double _chatFontSize;
 
   @override
   void initState() {
     super.initState();
     _slideshowInterval = AppSettings.instance.slideshowIntervalSeconds;
     _slideshowAutoplay = AppSettings.instance.slideshowAutoplay;
+    _chatFontSize = AppSettings.instance.chatFontSize;
   }
 
   @override
@@ -36,6 +39,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
       body: ListView(
         children: [
+          _SectionHeader(title: 'Account', theme: theme),
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: const Text('Profile'),
+            subtitle: const Text('Edit display name and avatar'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+          ),
+          const Divider(),
           _SectionHeader(title: 'Appearance', theme: theme),
           ListTile(
             leading: Icon(
@@ -65,6 +79,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ref.read(themeModeProvider.notifier).state = mode;
                 AppSettings.instance.themeMode = mode;
               },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.text_fields),
+            title: const Text('Chat font size'),
+            subtitle: Text('${_chatFontSize.round()} sp'),
+            trailing: SizedBox(
+              width: 200,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: _chatFontSize > 10
+                        ? () {
+                            setState(() => _chatFontSize -= 1);
+                            AppSettings.instance.chatFontSize = _chatFontSize;
+                            ref.read(chatFontSizeProvider.notifier).state = _chatFontSize;
+                          }
+                        : null,
+                  ),
+                  Text(
+                    '${_chatFontSize.round()}',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: _chatFontSize < 24
+                        ? () {
+                            setState(() => _chatFontSize += 1);
+                            AppSettings.instance.chatFontSize = _chatFontSize;
+                            ref.read(chatFontSizeProvider.notifier).state = _chatFontSize;
+                          }
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
           const Divider(),

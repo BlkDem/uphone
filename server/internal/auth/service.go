@@ -109,6 +109,10 @@ func (s *Service) GoogleSignIn(ctx context.Context, idToken string) (*users.Auth
 
 	user, err := s.userRepo.GetByGoogleID(ctx, googleUser.Sub)
 	if err == nil {
+		if user.AvatarURL == "" && googleUser.Picture != "" {
+			user.AvatarURL = googleUser.Picture
+			_ = s.userRepo.Update(ctx, user)
+		}
 		_ = s.userRepo.UpdateStatus(ctx, user.ID, "online")
 		return s.generateTokens(user)
 	}
@@ -117,6 +121,10 @@ func (s *Service) GoogleSignIn(ctx context.Context, idToken string) (*users.Auth
 	if err == nil {
 		if err := s.userRepo.LinkGoogleID(ctx, user.ID, googleUser.Sub); err != nil {
 			return nil, fmt.Errorf("link google id: %w", err)
+		}
+		if user.AvatarURL == "" && googleUser.Picture != "" {
+			user.AvatarURL = googleUser.Picture
+			_ = s.userRepo.Update(ctx, user)
 		}
 		_ = s.userRepo.UpdateStatus(ctx, user.ID, "online")
 		return s.generateTokens(user)

@@ -46,4 +46,7 @@ class AppSettings {
     };
     _prefs.setString('theme_mode', value);
   }
+
+  double get chatFontSize => _prefs.getDouble('chat_font_size') ?? 14.0;
+  set chatFontSize(double value) => _prefs.setDouble('chat_font_size', value);
 }

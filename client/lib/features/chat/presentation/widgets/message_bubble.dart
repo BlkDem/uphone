@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
 import 'package:uphone_client/core/utils/html_media_player.dart';
+import 'package:uphone_client/main.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends ConsumerWidget {
   final ChatMessage message;
   final bool isMe;
   final bool showSender;
+  final Map<String, String> contactAvatars;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final Function(String)? onReact;
@@ -21,6 +24,7 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     this.showSender = false,
+    this.contactAvatars = const {},
     this.onEdit,
     this.onDelete,
     this.onReact,
@@ -29,8 +33,9 @@ class MessageBubble extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final fontSize = ref.watch(chatFontSizeProvider);
 
     if (message.isDeleted) {
       return Padding(
@@ -58,15 +63,48 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           if (showSender)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
-              child: Text(
-                message.sender?.displayName ?? 'Unknown',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
+            Builder(
+              builder: (context) {
+                final senderName = message.sender?.displayName ?? 'Unknown';
+                final senderAvatarUrl = message.sender?.avatarUrl ?? '';
+                final contactAvatar = contactAvatars[senderName] ?? '';
+                final avatarUrl = senderAvatarUrl.isNotEmpty
+                    ? senderAvatarUrl
+                    : contactAvatar;
+                return Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 8,
+                        backgroundColor: colorScheme.primaryContainer,
+                        backgroundImage: avatarUrl.isNotEmpty
+                            ? NetworkImage(avatarUrl)
+                            : null,
+                        child: avatarUrl.isEmpty
+                            ? Text(
+                                senderName[0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: colorScheme.onPrimaryContainer,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        senderName,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
+                            ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           GestureDetector(
             onLongPress: () => _showContextMenu(context),
@@ -102,6 +140,7 @@ class MessageBubble extends StatelessWidget {
                         color: isMe
                             ? colorScheme.onPrimaryContainer
                             : colorScheme.onSurface,
+                        fontSize: fontSize,
                       ),
                     ),
                   if (message.fileUrl.isNotEmpty) ...[
