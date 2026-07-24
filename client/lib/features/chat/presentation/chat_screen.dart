@@ -28,10 +28,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _initialScrollDone = false;
   final _firstUnreadKey = GlobalKey();
   int? _firstUnreadIndex;
+  int _savedUnreadCount = 0;
 
   @override
   void initState() {
     super.initState();
+    final chatState = ref.read(chatProvider);
+    final chat = chatState.chats.where((c) => c.id == widget.chatId).toList();
+    if (chat.isNotEmpty) {
+      _savedUnreadCount = chat.first.unreadCount;
+    }
     Future.microtask(() {
       ref.read(chatProvider.notifier).openChat(widget.chatId);
       ref.read(contactsProvider.notifier).loadContacts();
@@ -58,15 +64,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (_initialScrollDone) return;
     _initialScrollDone = true;
 
-    final currentChat = chatState.chats.firstWhere(
-      (c) => c.id == widget.chatId,
-      orElse: () => chatState.chats.isNotEmpty ? chatState.chats.first : throw Exception('Chat not found'),
-    );
+    final unreadCount = _savedUnreadCount;
 
-    if (currentChat.unreadCount <= 0 || chatState.messages.length <= 1) {
+    if (unreadCount <= 0 || chatState.messages.length <= 1) {
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     } else {
-      final unreadStart = chatState.messages.length - currentChat.unreadCount;
+      final unreadStart = chatState.messages.length - unreadCount;
       _firstUnreadIndex = unreadStart.clamp(0, chatState.messages.length - 1);
 
       // Phase 1: rough jump to get target widget into viewport
