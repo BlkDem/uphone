@@ -62,6 +62,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _performInitialScroll(ChatState chatState) {
     if (_initialScrollDone) return;
+
+    if (!_scrollController.hasClients || !_scrollController.position.hasContentDimensions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _performInitialScroll(chatState);
+      });
+      return;
+    }
+
     _initialScrollDone = true;
 
     final unreadCount = _savedUnreadCount;
@@ -72,7 +80,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final unreadStart = chatState.messages.length - unreadCount;
       _firstUnreadIndex = unreadStart.clamp(0, chatState.messages.length - 1);
 
-      // Phase 1: rough jump to get target widget into viewport
       double offset = 0;
       for (int i = 0; i < _firstUnreadIndex!; i++) {
         offset += _estimateMessageHeight(chatState.messages[i]);
@@ -82,7 +89,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _scrollController.position.maxScrollExtent,
       ));
 
-      // Phase 2: precise scroll after the target widget renders
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_firstUnreadKey.currentContext != null) {
           Scrollable.ensureVisible(
