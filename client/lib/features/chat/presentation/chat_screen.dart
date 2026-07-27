@@ -380,6 +380,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ref.read(chatProvider.notifier).sendTypingStart(widget.chatId),
                 onTypingStop: () =>
                     ref.read(chatProvider.notifier).sendTypingStop(widget.chatId),
+                editingMessage: _editingMessageId != null
+                    ? ref.read(chatProvider).messages
+                        .where((m) => m.id == _editingMessageId)
+                        .firstOrNull
+                    : null,
+                onCancelEdit: () => setState(() => _editingMessageId = null),
               ),
             ],
           ),

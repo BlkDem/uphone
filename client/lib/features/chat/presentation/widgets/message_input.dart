@@ -3,12 +3,15 @@ import 'dart:typed_data';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:uphone_client/shared/models/chat.dart';
 
 class MessageInput extends StatefulWidget {
   final Function(String) onSend;
   final Function(String, String, Uint8List)? onSendFile;
   final VoidCallback? onTypingStart;
   final VoidCallback? onTypingStop;
+  final ChatMessage? editingMessage;
+  final VoidCallback? onCancelEdit;
 
   const MessageInput({
     super.key,
@@ -16,6 +19,8 @@ class MessageInput extends StatefulWidget {
     this.onSendFile,
     this.onTypingStart,
     this.onTypingStop,
+    this.editingMessage,
+    this.onCancelEdit,
   });
 
   @override
@@ -29,6 +34,24 @@ class _MessageInputState extends State<MessageInput> {
   bool _isTyping = false;
   bool _showEmojiPicker = false;
   bool _isUploading = false;
+  String? _lastEditingId;
+
+  @override
+  void didUpdateWidget(covariant MessageInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.editingMessage != null &&
+        widget.editingMessage!.id != _lastEditingId) {
+      _lastEditingId = widget.editingMessage!.id;
+      _controller.text = widget.editingMessage!.content;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
+      _focusNode.requestFocus();
+    } else if (widget.editingMessage == null && _lastEditingId != null) {
+      _lastEditingId = null;
+      _controller.clear();
+    }
+  }
 
   @override
   void dispose() {
@@ -211,6 +234,38 @@ class _MessageInputState extends State<MessageInput> {
                   hintText: 'Search emoji...',
                 ),
               ),
+            ),
+          ),
+        if (widget.editingMessage != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+              border: Border(
+                left: BorderSide(color: colorScheme.primary, width: 3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.edit, size: 16, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Editing: ${widget.editingMessage!.content}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colorScheme.onPrimaryContainer,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: widget.onCancelEdit,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
           ),
         if (_isUploading)

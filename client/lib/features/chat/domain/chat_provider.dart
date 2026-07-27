@@ -551,6 +551,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> editMessage(String chatId, String msgId, String content) async {
     try {
       await _repository.editMessage(chatId, msgId, content);
+      state = state.copyWith(
+        messages: state.messages.map((m) {
+          if (m.id == msgId) {
+            return ChatMessage(
+              id: m.id,
+              chatId: m.chatId,
+              senderId: m.senderId,
+              content: content,
+              type: m.type,
+              fileUrl: m.fileUrl,
+              replyTo: m.replyTo,
+              isPinned: m.isPinned,
+              isDeleted: m.isDeleted,
+              status: m.status,
+              createdAt: m.createdAt,
+              updatedAt: DateTime.now().toUtc(),
+              sender: m.sender,
+            );
+          }
+          return m;
+        }).toList(),
+      );
     } catch (_) {}
   }
 
