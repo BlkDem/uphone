@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
@@ -134,14 +136,25 @@ class MessageBubble extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (message.content.isNotEmpty)
-                    Text(
-                      message.content,
+                    Linkify(
+                      text: message.content,
                       style: TextStyle(
                         color: isMe
                             ? colorScheme.onPrimaryContainer
                             : colorScheme.onSurface,
                         fontSize: fontSize,
                       ),
+                      linkStyle: TextStyle(
+                        color: colorScheme.primary,
+                        fontSize: fontSize,
+                        decoration: TextDecoration.underline,
+                      ),
+                      onOpen: (link) async {
+                        final uri = Uri.parse(link.url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
                     ),
                   if (message.fileUrl.isNotEmpty) ...[
                     const SizedBox(height: 4),
