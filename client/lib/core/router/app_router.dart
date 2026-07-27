@@ -66,6 +66,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/chats/:chatId',
             builder: (context, state) => ChatScreen(
+              key: ValueKey(state.pathParameters['chatId']),
               chatId: state.pathParameters['chatId']!,
             ),
           ),

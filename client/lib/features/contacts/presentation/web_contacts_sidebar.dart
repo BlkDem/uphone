@@ -97,7 +97,6 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
                               currentUserId: authState.user?.id ?? '',
                               contacts: const [],
                               onTap: () {
-                                ref.read(chatProvider.notifier).openChat(chat.id);
                                 context.go('/chats/${chat.id}');
                               },
                             ),

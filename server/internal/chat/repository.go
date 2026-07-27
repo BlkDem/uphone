@@ -339,6 +339,15 @@ func (r *Repository) SendMessage(ctx context.Context, msg *Message) error {
 	return nil
 }
 
+func (r *Repository) CountMessages(ctx context.Context, chatID string) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE chat_id = ?`, chatID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, limit, offset int) ([]Message, error) {
 	if limit <= 0 {
 		limit = 50

@@ -15,7 +15,7 @@ class WsClient {
   bool _shouldReconnect = true;
   int _reconnectAttempts = 0;
   static const int _maxReconnectDelay = 60;
-  static const int _maxReconnectAttempts = 5;
+  static const int _maxReconnectAttempts = 30;
   String? _wsUrl;
   final Map<String, WSMessageHandler> _messageHandlers = {};
   WSMessageHandler? _onConnect;
@@ -80,6 +80,10 @@ class WsClient {
       return;
     }
 
+    _pingTimer?.cancel();
+    _channel?.sink.close();
+    _channel = null;
+
     try {
       final uri = Uri.parse('${_wsUrl ?? "ws://localhost:8080/ws"}?token=$_token');
       _channel = WebSocketChannel.connect(uri);
@@ -130,8 +134,9 @@ class WsClient {
   }
 
   int _getReconnectDelay() {
+    final attempt = _reconnectAttempts;
     _reconnectAttempts++;
-    final delay = (2 * _reconnectAttempts).clamp(2, _maxReconnectDelay);
+    final delay = (2 * (attempt + 1)).clamp(2, _maxReconnectDelay);
     return delay;
   }
 
@@ -171,6 +176,7 @@ class WsClient {
     if (_token == null || _token!.isEmpty) return;
     _reconnectAttempts = 0;
     _shouldReconnect = true;
+    _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     _channel?.sink.close();
     _channel = null;

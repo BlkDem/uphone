@@ -8,6 +8,32 @@ import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 
+class MessagesPage {
+  final List<ChatMessage> messages;
+  final int totalCount;
+  final int offset;
+  final int limit;
+
+  MessagesPage({
+    required this.messages,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+  });
+
+  factory MessagesPage.fromJson(Map<String, dynamic> json) {
+    final list = (json['messages'] as List)
+        .map((j) => ChatMessage.fromJson(j as Map<String, dynamic>))
+        .toList();
+    return MessagesPage(
+      messages: list,
+      totalCount: json['total_count'] as int? ?? 0,
+      offset: json['offset'] as int? ?? 0,
+      limit: json['limit'] as int? ?? 50,
+    );
+  }
+}
+
 class ChatRepository {
   final Dio _dio;
 
@@ -32,11 +58,10 @@ class ChatRepository {
     return Chat.fromJson(response.data);
   }
 
-  Future<List<ChatMessage>> getMessages(String chatId, {int limit = 50, int offset = 0}) async {
+  Future<MessagesPage> getMessages(String chatId, {int limit = 50, int offset = 0}) async {
     final response = await _dio.get('/api/v1/chats/$chatId/messages',
         queryParameters: {'limit': limit, 'offset': offset});
-    final data = response.data as List;
-    return data.map((json) => ChatMessage.fromJson(json)).toList();
+    return MessagesPage.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<ChatMessage> sendMessage(String chatId, {required String content, String replyTo = ''}) async {
@@ -133,6 +158,11 @@ class ChatState {
   final List<ChatMessage> messages;
   final bool isLoadingChats;
   final bool isLoadingMessages;
+  final bool isLoadingOlder;
+  final bool hasMoreMessages;
+  final int totalMessages;
+  final int currentOffset;
+  final int savedUnreadCount;
   final Map<String, bool> typingUsers;
 
   const ChatState({
@@ -141,6 +171,11 @@ class ChatState {
     this.messages = const [],
     this.isLoadingChats = false,
     this.isLoadingMessages = false,
+    this.isLoadingOlder = false,
+    this.hasMoreMessages = true,
+    this.totalMessages = 0,
+    this.currentOffset = 0,
+    this.savedUnreadCount = 0,
     this.typingUsers = const {},
   });
 
@@ -150,6 +185,11 @@ class ChatState {
     List<ChatMessage>? messages,
     bool? isLoadingChats,
     bool? isLoadingMessages,
+    bool? isLoadingOlder,
+    bool? hasMoreMessages,
+    int? totalMessages,
+    int? currentOffset,
+    int? savedUnreadCount,
     Map<String, bool>? typingUsers,
   }) {
     return ChatState(
@@ -158,6 +198,11 @@ class ChatState {
       messages: messages ?? this.messages,
       isLoadingChats: isLoadingChats ?? this.isLoadingChats,
       isLoadingMessages: isLoadingMessages ?? this.isLoadingMessages,
+      isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+      hasMoreMessages: hasMoreMessages ?? this.hasMoreMessages,
+      totalMessages: totalMessages ?? this.totalMessages,
+      currentOffset: currentOffset ?? this.currentOffset,
+      savedUnreadCount: savedUnreadCount ?? this.savedUnreadCount,
       typingUsers: typingUsers ?? this.typingUsers,
     );
   }
@@ -266,9 +311,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _addMessage(ChatMessage msg) {
     if (msg.chatId == state.activeChatId) {
       state = state.copyWith(messages: [...state.messages, msg]);
-      if (msg.senderId != currentUserId) {
-        markAsRead(msg.chatId);
-      }
     } else if (msg.senderId != currentUserId) {
       final updatedChats = state.chats.map((chat) {
         if (chat.id == msg.chatId) {
@@ -316,69 +358,147 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> loadChats() async {
-    state = state.copyWith(isLoadingChats: true);
     try {
       final chats = await _repository.getChats();
-      state = state.copyWith(chats: chats, isLoadingChats: false);
+      final existing = {for (final c in state.chats) c.id: c};
+      final merged = chats.map((c) {
+        final prev = existing[c.id];
+        if (prev != null && prev.unreadCount > c.unreadCount) {
+          return Chat(
+            id: c.id,
+            type: c.type,
+            name: c.name,
+            description: c.description,
+            avatarUrl: c.avatarUrl,
+            createdBy: c.createdBy,
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            lastMessage: c.lastMessage ?? prev.lastMessage,
+            unreadCount: prev.unreadCount,
+          );
+        }
+        return c;
+      }).toList();
+      state = state.copyWith(chats: merged, isLoadingChats: false);
     } catch (_) {
       state = state.copyWith(isLoadingChats: false);
     }
   }
 
   Future<void> openChat(String chatId) async {
+    if (state.activeChatId == chatId && !state.isLoadingMessages && state.messages.isNotEmpty) return;
+
+    final chat = state.chats.where((c) => c.id == chatId).toList();
+    final unreadCount = chat.isNotEmpty ? chat.first.unreadCount : 0;
+
     state = state.copyWith(
       activeChatId: chatId,
       isLoadingMessages: true,
       messages: [],
+      savedUnreadCount: unreadCount,
+      hasMoreMessages: true,
+      totalMessages: 0,
+      currentOffset: 0,
     );
     try {
-      final messages = await _repository.getMessages(chatId);
-      messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      state = state.copyWith(messages: messages, isLoadingMessages: false);
-      // Mark chat as read
-      await markAsRead(chatId);
-    } catch (_) {
+      int offset = 0;
+      if (unreadCount > 50) {
+        offset = unreadCount - 50;
+      }
+
+      final page = await _repository.getMessages(chatId, limit: 50, offset: offset);
+      final sorted = page.messages.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      state = state.copyWith(
+        messages: sorted,
+        isLoadingMessages: false,
+        totalMessages: page.totalCount,
+        currentOffset: offset,
+        hasMoreMessages: offset + 50 < page.totalCount,
+      );
+    } catch (e) {
       state = state.copyWith(isLoadingMessages: false);
     }
   }
 
-  Future<void> markAsRead(String chatId) async {
+  Future<void> loadOlderMessages() async {
+    if (state.isLoadingOlder || !state.hasMoreMessages || state.activeChatId == null) return;
+
+    state = state.copyWith(isLoadingOlder: true);
     try {
-      // Get the last message ID to mark as read
-      final messages = await _repository.getMessages(chatId, limit: 1);
-      if (messages.isNotEmpty) {
-        final lastMsg = messages.first;
-        await _repository.markAsRead(chatId, lastMsg.id);
-        // Reset unread count locally
-        final updatedChats = state.chats.map((chat) {
-          if (chat.id == chatId) {
-            return Chat(
-              id: chat.id,
-              type: chat.type,
-              name: chat.name,
-              description: chat.description,
-              avatarUrl: chat.avatarUrl,
-              createdBy: chat.createdBy,
-              createdAt: chat.createdAt,
-              updatedAt: chat.updatedAt,
-              lastMessage: chat.lastMessage,
-              unreadCount: 0,
-            );
-          }
-          return chat;
-        }).toList();
-        state = state.copyWith(chats: updatedChats);
-      }
+      final newOffset = state.currentOffset + 50;
+      final page = await _repository.getMessages(
+        state.activeChatId!,
+        limit: 50,
+        offset: newOffset,
+      );
+      final older = page.messages.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      state = state.copyWith(
+        messages: [...older, ...state.messages],
+        isLoadingOlder: false,
+        currentOffset: newOffset,
+        totalMessages: page.totalCount,
+        hasMoreMessages: newOffset + 50 < page.totalCount,
+      );
+    } catch (_) {
+      state = state.copyWith(isLoadingOlder: false);
+    }
+  }
+
+  Future<void> markAsRead(String chatId, [String? messageId]) async {
+    try {
+      final targetId = messageId ?? (state.messages.isEmpty ? null : state.messages.last.id);
+      if (targetId == null) return;
+      await _repository.markAsRead(chatId, targetId);
+      final updatedChats = state.chats.map((chat) {
+        if (chat.id == chatId && chat.unreadCount > 0) {
+          return Chat(
+            id: chat.id,
+            type: chat.type,
+            name: chat.name,
+            description: chat.description,
+            avatarUrl: chat.avatarUrl,
+            createdBy: chat.createdBy,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            lastMessage: chat.lastMessage,
+            unreadCount: 0,
+          );
+        }
+        return chat;
+      }).toList();
+      state = state.copyWith(chats: updatedChats);
     } catch (_) {}
   }
 
   Future<void> closeChat() async {
     final chatId = state.activeChatId;
-    final msgs = state.messages;
-    state = state.copyWith(activeChatId: null, messages: []);
+    final msgs = List<ChatMessage>.from(state.messages);
+    state = state.copyWith(activeChatId: null, messages: [], savedUnreadCount: 0);
     if (chatId != null && msgs.isNotEmpty) {
-      final lastMsg = msgs.last;
-      await markAsRead(chatId);
+      final lastMsgId = msgs.last.id;
+      await _repository.markAsRead(chatId, lastMsgId);
+      final updatedChats = state.chats.map((chat) {
+        if (chat.id == chatId && chat.unreadCount > 0) {
+          return Chat(
+            id: chat.id,
+            type: chat.type,
+            name: chat.name,
+            description: chat.description,
+            avatarUrl: chat.avatarUrl,
+            createdBy: chat.createdBy,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            lastMessage: chat.lastMessage,
+            unreadCount: 0,
+          );
+        }
+        return chat;
+      }).toList();
+      state = state.copyWith(chats: updatedChats);
     }
   }
 

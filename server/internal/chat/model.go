@@ -65,6 +65,13 @@ type Sender struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
+type MessagesResponse struct {
+	Messages    []Message `json:"messages"`
+	TotalCount  int       `json:"total_count"`
+	Offset      int       `json:"offset"`
+	Limit       int       `json:"limit"`
+}
+
 type SendMessageRequest struct {
 	Content string `json:"content"`
 	Type    string `json:"type"`

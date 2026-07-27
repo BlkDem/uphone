@@ -148,7 +148,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                       currentUserId: authState.user?.id ?? '',
                       contacts: contactsState.contacts,
                       onTap: () {
-                        ref.read(chatProvider.notifier).openChat(chat.id);
                         context.go('/chats/${chat.id}');
                       },
                     );

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/uphone/server/internal/fcm"
@@ -219,7 +220,20 @@ func (h *APIHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.repo.GetMessages(r.Context(), chatID, userID, 50, 0)
+	limit := 50
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	messages, err := h.repo.GetMessages(r.Context(), chatID, userID, limit, offset)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, "failed to get messages")
 		return
@@ -229,7 +243,18 @@ func (h *APIHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		messages = []Message{}
 	}
 
-	shared.WriteJSON(w, http.StatusOK, messages)
+	totalCount, err := h.repo.CountMessages(r.Context(), chatID)
+	if err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to count messages")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, MessagesResponse{
+		Messages:   messages,
+		TotalCount: totalCount,
+		Offset:     offset,
+		Limit:      limit,
+	})
 }
 
 func (h *APIHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
