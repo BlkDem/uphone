@@ -329,7 +329,7 @@ class _MessageInputState extends State<MessageInput> {
               ),
               const SizedBox(height: 8),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: TextField(
