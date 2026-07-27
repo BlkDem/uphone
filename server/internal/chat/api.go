@@ -288,8 +288,12 @@ func (h *APIHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
-	userID := 	middleware.GetUserID(r)
+	userID := middleware.GetUserID(r)
 	msgID := r.PathValue("msgId")
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = "me"
+	}
 
 	msg, err := h.repo.GetMessageByID(r.Context(), msgID)
 	if err != nil {
@@ -297,14 +301,20 @@ func (h *APIHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if msg.SenderID != userID {
-		shared.WriteError(w, http.StatusForbidden, "not your message")
-		return
-	}
-
-	if err := h.repo.DeleteMessage(r.Context(), msgID); err != nil {
-		shared.WriteError(w, http.StatusInternalServerError, "failed to delete message")
-		return
+	if mode == "all" {
+		if msg.SenderID != userID {
+			shared.WriteError(w, http.StatusForbidden, "only the sender can delete for everyone")
+			return
+		}
+		if err := h.repo.DeleteMessageForAll(r.Context(), msgID); err != nil {
+			shared.WriteError(w, http.StatusInternalServerError, "failed to delete message")
+			return
+		}
+	} else {
+		if err := h.repo.DeleteMessageForMe(r.Context(), msgID, userID); err != nil {
+			shared.WriteError(w, http.StatusInternalServerError, "failed to delete message")
+			return
+		}
 	}
 
 	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
@@ -587,7 +597,7 @@ func (h *APIHandler) GetMediaMessages(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	offset := 0
 
-	messages, err := h.repo.GetMediaMessages(r.Context(), chatID, mediaType, limit, offset)
+	messages, err := h.repo.GetMediaMessages(r.Context(), chatID, userID, mediaType, limit, offset)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, "failed to get media messages")
 		return

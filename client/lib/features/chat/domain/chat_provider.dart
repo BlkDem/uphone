@@ -78,8 +78,8 @@ class ChatRepository {
     });
   }
 
-  Future<void> deleteMessage(String chatId, String msgId) async {
-    await _dio.delete('/api/v1/chats/$chatId/messages/$msgId');
+  Future<void> deleteMessage(String chatId, String msgId, {String mode = 'me'}) async {
+    await _dio.delete('/api/v1/chats/$chatId/messages/$msgId', queryParameters: {'mode': mode});
   }
 
   Future<void> addReaction(String chatId, String msgId, String emoji) async {
@@ -554,9 +554,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (_) {}
   }
 
-  Future<void> deleteMessage(String chatId, String msgId) async {
+  Future<void> deleteMessage(String chatId, String msgId, {String mode = 'me'}) async {
     try {
-      await _repository.deleteMessage(chatId, msgId);
+      await _repository.deleteMessage(chatId, msgId, mode: mode);
       state = state.copyWith(
         messages: state.messages.where((m) => m.id != msgId).toList(),
       );

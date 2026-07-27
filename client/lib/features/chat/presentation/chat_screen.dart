@@ -466,7 +466,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           showSender: showSender,
           contactAvatars: contactAvatars,
           onEdit: isMe ? () => _startEdit(msg.id) : null,
-          onDelete: isMe ? () => _deleteMessage(msg.id) : null,
+          onDelete: () => _deleteMessage(msg.id),
           onReact: (emoji) => _addReaction(msg.id, emoji),
           onForward: () => _forwardMessage(msg.id),
           onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
@@ -516,7 +516,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           showSender: showSender,
           contactAvatars: contactAvatars,
           onEdit: isMe ? () => _startEdit(msg.id) : null,
-          onDelete: isMe ? () => _deleteMessage(msg.id) : null,
+          onDelete: () => _deleteMessage(msg.id),
           onReact: (emoji) => _addReaction(msg.id, emoji),
           onForward: () => _forwardMessage(msg.id),
           onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
@@ -551,11 +551,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _deleteMessage(String msgId) {
+    final chatState = ref.read(chatProvider);
+    final authState = ref.read(authProvider);
+    final currentChat = chatState.chats.where((c) => c.id == widget.chatId).firstOrNull;
+    final msg = chatState.messages.where((m) => m.id == msgId).firstOrNull;
+    if (currentChat == null || msg == null) return;
+
+    final isMe = msg.senderId == authState.user?.id;
+    final isGroup = currentChat.type == 'group' || currentChat.type == 'channel';
+
+    showDialog(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Delete Message'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'me');
+            },
+            child: const Text('Delete for me'),
+          ),
+          if (isMe)
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                if (isGroup) {
+                  _confirmDeleteForAll(msgId);
+                } else {
+                  ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'all');
+                }
+              },
+              child: Text(isGroup ? 'Delete for everyone' : 'Delete for me and ${currentChat.name}'),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteForAll(String msgId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Message'),
-        content: const Text('Are you sure?'),
+        title: const Text('Delete for everyone?'),
+        content: const Text('This message will be deleted for all members of this chat.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -563,9 +606,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           FilledButton(
             onPressed: () {
-              ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId);
               Navigator.pop(context);
+              ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'all');
             },
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: const Text('Delete'),
           ),
         ],

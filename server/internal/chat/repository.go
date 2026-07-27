@@ -120,11 +120,12 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 		 LEFT JOIN users u_peer ON cm_peer.user_id = u_peer.id
 		 LEFT JOIN messages lm ON lm.chat_id = c.id AND lm.id = (
 		     SELECT m2.id FROM messages m2 WHERE m2.chat_id = c.id AND m2.is_deleted = FALSE
+		     AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m2.id AND md.user_id = ?)
 		     ORDER BY m2.created_at DESC LIMIT 1
 		 )
 		 LEFT JOIN users lu ON lm.sender_id = lu.id
 		 WHERE cm.user_id = ?
-		 ORDER BY c.updated_at DESC`, userID, userID)
+		 ORDER BY c.updated_at DESC`, userID, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +206,8 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 			 INNER JOIN chat_members cm ON m.chat_id = cm.chat_id
 			 WHERE m.chat_id = ? AND cm.user_id = ? AND m.sender_id != ?
 			   AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
-			   AND m.is_deleted = FALSE`, c.ID, userID, userID).Scan(&unreadCount)
+			   AND m.is_deleted = FALSE
+			   AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)`, c.ID, userID, userID, userID).Scan(&unreadCount)
 		if err == nil {
 			c.UnreadCount = unreadCount
 		}
@@ -368,9 +370,9 @@ func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, lim
 		        END
 		 FROM messages m
 		 LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.chat_id = ?
+		 WHERE m.chat_id = ? AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)
 		 ORDER BY m.created_at DESC
-		 LIMIT ? OFFSET ?`, userID, chatID, limit, offset)
+		 LIMIT ? OFFSET ?`, userID, chatID, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +447,14 @@ func (r *Repository) EditMessage(ctx context.Context, msgID, content string) err
 	return nil
 }
 
-func (r *Repository) DeleteMessage(ctx context.Context, msgID string) error {
+func (r *Repository) DeleteMessageForMe(ctx context.Context, msgID, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT IGNORE INTO message_deletions (message_id, user_id) VALUES (?, ?)`,
+		msgID, userID)
+	return err
+}
+
+func (r *Repository) DeleteMessageForAll(ctx context.Context, msgID string) error {
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE messages SET is_deleted = TRUE, content = '', updated_at = ? WHERE id = ?`,
 		time.Now().UTC(), msgID)
@@ -512,7 +521,7 @@ func (r *Repository) getSenderInfo(_ context.Context, userID string) (*Sender, e
 	return s, nil
 }
 
-func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, mediaType string, limit, offset int) ([]Message, error) {
+func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, userID string, mediaType string, limit, offset int) ([]Message, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -523,8 +532,9 @@ func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, mediaT
 		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
 		 FROM messages m
 		 LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.chat_id = ? AND m.is_deleted = FALSE AND m.type != 'text'`
-	args := []interface{}{chatID}
+		 WHERE m.chat_id = ? AND m.is_deleted = FALSE AND m.type != 'text'
+		   AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)`
+	args := []interface{}{chatID, userID}
 
 	if mediaType != "" {
 		query += " AND m.type = ?"
@@ -616,7 +626,8 @@ func (r *Repository) GetUnreadCount(ctx context.Context, chatID, userID string) 
 		 INNER JOIN chat_members cm ON m.chat_id = cm.chat_id
 		 WHERE m.chat_id = ? AND cm.user_id = ? AND m.sender_id != ?
 		   AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
-		   AND m.is_deleted = FALSE`, chatID, userID, userID).Scan(&count)
+		   AND m.is_deleted = FALSE
+		   AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)`, chatID, userID, userID, userID).Scan(&count)
 	return count, err
 }
 
