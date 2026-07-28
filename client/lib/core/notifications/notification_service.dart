@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:uphone_client/core/config/server_config.dart';
+import 'package:uphone_client/core/platform/windows_tray_service.dart';
 
 import 'package:dio/dio.dart';
 
@@ -50,12 +51,7 @@ class NotificationService {
 
   Future<void> initialize() async {
     try {
-      _fcm = FirebaseMessaging.instance;
-
-      // Register background handler
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-      // Initialize local notifications
+      // Initialize local notifications (Android)
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const initSettings = InitializationSettings(android: androidSettings);
       await _localNotifications.initialize(
@@ -63,7 +59,7 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onNotificationTap,
       );
 
-      // Create notification channel for messages
+      // Android-specific: create notification channels
       if (Platform.isAndroid) {
         final androidPlugin =
             _localNotifications.resolvePlatformSpecificImplementation<
@@ -90,50 +86,52 @@ class NotificationService {
         }
       }
 
-      // Request permission
-      final settings = await _fcm!.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-        criticalAlert: true,
-      );
-      debugPrint('FCM permission: ${settings.authorizationStatus}');
+      // Android-specific: FCM setup
+      if (Platform.isAndroid) {
+        try {
+          _fcm = FirebaseMessaging.instance;
+          FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+          final settings = await _fcm!.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+            provisional: false,
+            criticalAlert: true,
+          );
+          debugPrint('FCM permission: ${settings.authorizationStatus}');
 
-      // Get token
-      _fcmToken = await _fcm!.getToken();
-      debugPrint('FCM token: $_fcmToken');
+          _fcmToken = await _fcm!.getToken();
+          debugPrint('FCM token: $_fcmToken');
 
-      // Listen for token refresh
-      _fcm!.onTokenRefresh.listen((token) {
-        _fcmToken = token;
-        _registerToken(token);
-      });
+          _fcm!.onTokenRefresh.listen((token) {
+            _fcmToken = token;
+            _registerToken(token);
+          });
 
-      // Handle foreground messages
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+          FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+          FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-      // Handle notification tap when app is in background
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+          final initialMessage = await _fcm!.getInitialMessage();
+          if (initialMessage != null) {
+            _handleMessageOpenedApp(initialMessage);
+          }
 
-      // Check if app opened from notification
-      final initialMessage = await _fcm!.getInitialMessage();
-      if (initialMessage != null) {
-        _handleMessageOpenedApp(initialMessage);
-      }
+          _callChannel.setMethodCallHandler((call) async {
+            if (call.method == 'onCallIntent') {
+              final data = Map<String, String>.from(call.arguments as Map);
+              _handleNativeCallIntent(data);
+            }
+          });
 
-      // Listen for native full-screen intent call data (from CallNotificationService)
-      _callChannel.setMethodCallHandler((call) async {
-        if (call.method == 'onCallIntent') {
-          final data = Map<String, String>.from(call.arguments as Map);
-          _handleNativeCallIntent(data);
+          if (_fcmToken != null) {
+            _registerToken(_fcmToken!);
+          }
+        } catch (e) {
+          debugPrint('FCM init skipped: $e');
         }
-      });
-
-      // Register token with server
-      if (_fcmToken != null) {
-        _registerToken(_fcmToken!);
       }
+
+      debugPrint('NotificationService initialized (Android: ${Platform.isAndroid}, Windows: ${Platform.isWindows})');
     } catch (e) {
       debugPrint('NotificationService initialize failed: $e');
     }
@@ -289,6 +287,17 @@ class NotificationService {
   }
 
   Future<void> _showSimpleNotification(String title, String body) async {
+    // On Windows, use system tray balloon
+    if (Platform.isWindows) {
+      try {
+        final tray = WindowsTrayService.instance;
+        if (tray.isInitialized) {
+          tray.showNotification(title, body);
+        }
+      } catch (_) {}
+      return;
+    }
+
     const androidDetails = AndroidNotificationDetails(
       'uphone_messages',
       'Messages',
@@ -306,6 +315,17 @@ class NotificationService {
   }
 
   Future<void> _showMissedCallNotification(String title, String body) async {
+    // On Windows, use system tray balloon
+    if (Platform.isWindows) {
+      try {
+        final tray = WindowsTrayService.instance;
+        if (tray.isInitialized) {
+          tray.showNotification(title, body);
+        }
+      } catch (_) {}
+      return;
+    }
+
     const androidDetails = AndroidNotificationDetails(
       'uphone_calls',
       'Calls',

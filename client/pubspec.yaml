@@ -37,6 +37,8 @@ dependencies:
   firebase_messaging: ^15.2.7
   scrollable_positioned_list: ^0.3.8
   flutter_linkify: ^6.0.0
+  system_tray: ^0.1.1
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:

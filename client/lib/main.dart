@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,7 @@ import 'core/config/app_settings.dart';
 import 'core/network/ws_client.dart';
 import 'core/network/ws_service_bridge.dart';
 import 'core/notifications/notification_service.dart';
+import 'core/platform/windows_tray_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'features/auth/domain/auth_provider.dart';
@@ -21,11 +24,13 @@ void main() async {
   await ServerConfig.instance.load();
   await AppSettings.getInstance();
   GoogleSignIn.instance.initialize();
-  try {
-    await Firebase.initializeApp();
-    NotificationService.instance.initialize();
-  } catch (e) {
-    debugPrint('Firebase init failed (notifications disabled): $e');
+
+  // Initialize notifications
+  NotificationService.instance.initialize();
+
+  // Initialize Windows tray
+  if (!kIsWeb && Platform.isWindows) {
+    WindowsTrayService.instance.initialize();
   }
 
   final container = ProviderContainer();
@@ -65,6 +70,9 @@ class _UPhoneAppState extends ConsumerState<UPhoneApp> with WidgetsBindingObserv
     final authState = ref.read(authProvider);
 
     if (authState.status != AuthStatus.authenticated) return;
+
+    // On Windows, keep WebSocket connected (no native background service)
+    if (Platform.isWindows) return;
 
     switch (state) {
       case AppLifecycleState.paused:
