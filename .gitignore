@@ -27,6 +27,7 @@ desktop.ini
 # Go
 server/server
 server/uphone
+server/uphone-server-linux
 *.exe
 *.test
 *.out
