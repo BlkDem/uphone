@@ -508,7 +508,11 @@ class MessageBubble extends ConsumerWidget {
     final hasActions = onEdit != null || onDelete != null || onForward != null || onReact != null;
     if (!hasActions) return;
 
-    final quickEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    final quickEmojis = [
+      '👍', '👎', '❤️', '🔥', '😂', '😮',
+      '😢', '😡', '🎉', '👏', '🤔', '🤮',
+      '💀', '🙏', '💯', '😍', '🤝', '😴',
+    ];
 
     showModalBottomSheet(
       context: context,
@@ -518,9 +522,10 @@ class MessageBubble extends ConsumerWidget {
           children: [
             if (onReact != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
                   children: quickEmojis.map((emoji) {
                     final isMy = message.myReactions.contains(emoji);
                     return GestureDetector(
