@@ -28,8 +28,8 @@ class WindowsTrayService {
       await _windowManager.ensureInitialized();
 
       const windowOptions = WindowOptions(
-        size: Size(420, 720),
-        minimumSize: Size(360, 500),
+        size: Size(1100, 720),
+        minimumSize: Size(800, 500),
         center: true,
       );
       await _windowManager.waitUntilReadyToShow(windowOptions, () async {

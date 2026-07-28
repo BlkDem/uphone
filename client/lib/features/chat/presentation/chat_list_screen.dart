@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,7 +29,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final authState = ref.watch(authProvider);
     final contactsState = ref.watch(contactsProvider);
 
-    if (kIsWeb) {
+    if (kIsWeb || Platform.isWindows) {
       return Scaffold(
         body: Center(
           child: Column(

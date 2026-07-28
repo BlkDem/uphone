@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uphone_client/features/contacts/presentation/web_contacts_sidebar.dart';
@@ -7,9 +9,11 @@ class WebShellScreen extends StatelessWidget {
 
   const WebShellScreen({super.key, required this.child});
 
+  bool get _useSidebarLayout => kIsWeb || (Platform.isWindows);
+
   @override
   Widget build(BuildContext context) {
-    if (!kIsWeb) return child;
+    if (!_useSidebarLayout) return child;
 
     return Scaffold(
       body: Row(
