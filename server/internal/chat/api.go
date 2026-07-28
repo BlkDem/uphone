@@ -338,6 +338,24 @@ func (h *APIHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "reaction added"})
 }
 
+func (h *APIHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	msgID := r.PathValue("msgId")
+
+	var req ReactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.repo.RemoveReaction(r.Context(), msgID, userID, req.Emoji); err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, "failed to remove reaction")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "reaction removed"})
+}
+
 func (h *APIHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
 	userID := 	middleware.GetUserID(r)
 	chatID := r.PathValue("id")

@@ -191,6 +191,50 @@ class MessageBubble extends ConsumerWidget {
               ),
             ),
           ),
+          if (message.reactions.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                left: isMe ? 36 : 8,
+                right: isMe ? 8 : 36,
+                top: 2,
+              ),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: message.reactions.entries.map((e) {
+                  final isMy = message.myReactions.contains(e.key);
+                  return GestureDetector(
+                    onTap: () => onReact?.call(e.key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isMy
+                            ? colorScheme.primaryContainer
+                            : colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: isMy
+                            ? Border.all(color: colorScheme.primary, width: 1)
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(e.key, style: const TextStyle(fontSize: 14)),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${e.value}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isMy ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
         ],
       ),
     );
@@ -461,8 +505,10 @@ class MessageBubble extends ConsumerWidget {
   }
 
   void _showContextMenu(BuildContext context) {
-    final hasActions = onEdit != null || onDelete != null || onForward != null;
+    final hasActions = onEdit != null || onDelete != null || onForward != null || onReact != null;
     if (!hasActions) return;
+
+    final quickEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
     showModalBottomSheet(
       context: context,
@@ -470,6 +516,38 @@ class MessageBubble extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onReact != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: quickEmojis.map((emoji) {
+                    final isMy = message.myReactions.contains(emoji);
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        onReact?.call(emoji);
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isMy
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                          border: isMy
+                              ? Border.all(color: Theme.of(context).colorScheme.primary)
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
             if (onForward != null)
               ListTile(
                 leading: const Icon(Icons.forward),

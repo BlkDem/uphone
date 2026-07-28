@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -410,6 +411,24 @@ func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, lim
 
 		messages = append(messages, msg)
 	}
+
+	if len(messages) > 0 {
+		ids := make([]string, len(messages))
+		for i, m := range messages {
+			ids[i] = m.ID
+		}
+		allReactions, _ := r.GetReactionsByMessages(ctx, ids)
+		myReactions, _ := r.GetMyReactionsByMessages(ctx, ids, userID)
+		for i := range messages {
+			if r, ok := allReactions[messages[i].ID]; ok {
+				messages[i].Reactions = r
+			}
+			if mr, ok := myReactions[messages[i].ID]; ok {
+				messages[i].MyReactions = mr
+			}
+		}
+	}
+
 	return messages, nil
 }
 
@@ -508,6 +527,71 @@ func (r *Repository) GetReactions(ctx context.Context, messageID string) (map[st
 		reactions[emoji] = cnt
 	}
 	return reactions, nil
+}
+
+func (r *Repository) GetReactionsByMessages(ctx context.Context, messageIDs []string) (map[string]map[string]int, error) {
+	if len(messageIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, len(messageIDs))
+	for i, id := range messageIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := `SELECT message_id, emoji, COUNT(*) as cnt FROM reactions WHERE message_id IN (` +
+		strings.Join(placeholders, ",") + `) GROUP BY message_id, emoji`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string]int)
+	for rows.Next() {
+		var msgID, emoji string
+		var cnt int
+		if err := rows.Scan(&msgID, &emoji, &cnt); err != nil {
+			return nil, err
+		}
+		if result[msgID] == nil {
+			result[msgID] = make(map[string]int)
+		}
+		result[msgID][emoji] = cnt
+	}
+	return result, nil
+}
+
+func (r *Repository) GetMyReactionsByMessages(ctx context.Context, messageIDs []string, userID string) (map[string][]string, error) {
+	if len(messageIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, 0, len(messageIDs)+1)
+	for i, id := range messageIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, userID)
+	query := `SELECT message_id, emoji FROM reactions WHERE message_id IN (` +
+		strings.Join(placeholders, ",") + `) AND user_id = ?`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]string)
+	for rows.Next() {
+		var msgID, emoji string
+		if err := rows.Scan(&msgID, &emoji); err != nil {
+			return nil, err
+		}
+		result[msgID] = append(result[msgID], emoji)
+	}
+	return result, nil
 }
 
 func (r *Repository) getSenderInfo(_ context.Context, userID string) (*Sender, error) {

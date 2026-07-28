@@ -55,6 +55,8 @@ class ChatMessage {
   final DateTime createdAt;
   final DateTime updatedAt;
   final MessageSender? sender;
+  final Map<String, int> reactions;
+  final List<String> myReactions;
 
   const ChatMessage({
     required this.id,
@@ -70,6 +72,8 @@ class ChatMessage {
     required this.createdAt,
     required this.updatedAt,
     this.sender,
+    this.reactions = const {},
+    this.myReactions = const [],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -87,6 +91,8 @@ class ChatMessage {
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       sender: json['sender'] != null ? MessageSender.fromJson(json['sender']) : null,
+      reactions: Map<String, int>.from(json['reactions'] ?? {}),
+      myReactions: List<String>.from(json['my_reactions'] ?? []),
     );
   }
 }

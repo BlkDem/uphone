@@ -88,6 +88,12 @@ class ChatRepository {
     });
   }
 
+  Future<void> removeReaction(String chatId, String msgId, String emoji) async {
+    await _dio.delete('/api/v1/chats/$chatId/messages/$msgId/react', data: {
+      'emoji': emoji,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> getMembers(String chatId) async {
     final response = await _dio.get('/api/v1/chats/$chatId/members');
     final data = response.data as List;
@@ -587,7 +593,46 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> addReaction(String chatId, String msgId, String emoji) async {
     try {
-      await _repository.addReaction(chatId, msgId, emoji);
+      final msg = state.messages.where((m) => m.id == msgId).firstOrNull;
+      if (msg == null) return;
+      final hasReaction = msg.myReactions.contains(emoji);
+      if (hasReaction) {
+        await _repository.removeReaction(chatId, msgId, emoji);
+      } else {
+        await _repository.addReaction(chatId, msgId, emoji);
+      }
+      state = state.copyWith(
+        messages: state.messages.map((m) {
+          if (m.id != msgId) return m;
+          final newMyReactions = List<String>.from(m.myReactions);
+          final newReactions = Map<String, int>.from(m.reactions);
+          if (hasReaction) {
+            newMyReactions.remove(emoji);
+            newReactions[emoji] = (newReactions[emoji] ?? 1) - 1;
+            if (newReactions[emoji]! <= 0) newReactions.remove(emoji);
+          } else {
+            newMyReactions.add(emoji);
+            newReactions[emoji] = (newReactions[emoji] ?? 0) + 1;
+          }
+          return ChatMessage(
+            id: m.id,
+            chatId: m.chatId,
+            senderId: m.senderId,
+            content: m.content,
+            type: m.type,
+            fileUrl: m.fileUrl,
+            replyTo: m.replyTo,
+            isPinned: m.isPinned,
+            isDeleted: m.isDeleted,
+            status: m.status,
+            createdAt: m.createdAt,
+            updatedAt: m.updatedAt,
+            sender: m.sender,
+            reactions: newReactions,
+            myReactions: newMyReactions,
+          );
+        }).toList(),
+      );
     } catch (_) {}
   }
 
