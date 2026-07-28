@@ -11,6 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   share_plus
   system_tray
   url_launcher_windows
+  win_toast
   window_manager
 )
 

@@ -360,6 +360,19 @@ class NotificationService {
     }
   }
 
+  void showNewMessageNotification(String title, String body) {
+    if (Platform.isWindows) {
+      try {
+        final tray = WindowsTrayService.instance;
+        if (tray.isInitialized) {
+          tray.showNotification(title, body);
+        }
+      } catch (_) {}
+      return;
+    }
+    _showSimpleNotification(title, body);
+  }
+
   Future<void> cancelAllNotifications() async {
     await _localNotifications.cancelAll();
   }

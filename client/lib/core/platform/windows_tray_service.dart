@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:win_toast/win_toast.dart';
 
 class WindowsTrayService {
   static final WindowsTrayService _instance = WindowsTrayService._();
@@ -14,6 +15,9 @@ class WindowsTrayService {
   final WindowManager _windowManager = WindowManager.instance;
   bool _isInitialized = false;
   bool _isQuitting = false;
+
+  // GUID for the notification activator class
+  static const _clsid = '2EB1AE51-98B7-4C2B-B1A0-000000000001';
 
   bool get isInitialized => _isInitialized;
 
@@ -27,19 +31,19 @@ class WindowsTrayService {
         size: Size(420, 720),
         minimumSize: Size(360, 500),
         center: true,
-        titleBarStyle: TitleBarStyle.hidden,
       );
       await _windowManager.waitUntilReadyToShow(windowOptions, () async {
         await _windowManager.show();
         await _windowManager.focus();
       });
 
+      await _windowManager.setPreventClose(true);
       _windowManager.addListener(_WindowCloseListener(_onWindowClose));
 
-      final iconPath = await _getIconPath();
+      // Init tray with Flutter asset (system_tray resolves relative to flutter_assets/)
       await _tray.initSystemTray(
         title: 'UPhone',
-        iconPath: iconPath,
+        iconPath: 'assets/tray_icon.ico',
         toolTip: 'UPhone Messenger',
       );
 
@@ -69,6 +73,22 @@ class WindowsTrayService {
         }
       });
 
+      // Initialize WinToast for native Windows notifications
+      try {
+        final toast = WinToast.instance();
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final iconPath = '$exeDir\\data\\flutter_assets\\assets\\tray_icon.ico';
+        await toast.initialize(
+          aumId: 'com.uphone.messenger',
+          displayName: 'UPhone Messenger',
+          iconPath: iconPath,
+          clsid: _clsid,
+        );
+        debugPrint('WinToast initialized');
+      } catch (e) {
+        debugPrint('WinToast init failed: $e');
+      }
+
       _isInitialized = true;
       debugPrint('Windows tray initialized');
     } catch (e) {
@@ -76,21 +96,10 @@ class WindowsTrayService {
     }
   }
 
-  Future<String> _getIconPath() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final iconPath = '$exeDir\\data\\flutter_assets\\windows\\runner\\resources\\app_icon.ico';
-    if (await File(iconPath).exists()) {
-      return iconPath;
-    }
-    final fallback = '$exeDir\\app_icon.ico';
-    if (await File(fallback).exists()) {
-      return fallback;
-    }
-    return '';
-  }
-
   void _onWindowClose() async {
     if (_isQuitting) {
+      await _windowManager.setPreventClose(false);
+      await _windowManager.close();
       exit(0);
     }
     await _windowManager.hide();
@@ -105,10 +114,26 @@ class WindowsTrayService {
     _windowManager.hide();
   }
 
-  void showNotification(String title, String body) {
-    // system_tray v0.1.1 doesn't support balloon notifications
-    // For Windows notifications, use a native MethodChannel or upgrade package
-    debugPrint('Notification: $title - $body');
+  Future<void> showNotification(String title, String body) async {
+    try {
+      final toast = WinToast.instance();
+      await toast.showToast(
+        toast: Toast(
+          children: [
+            ToastChildVisual(
+              binding: ToastVisualBinding(
+                children: [
+                  ToastVisualBindingChildText(text: title, id: 0),
+                  ToastVisualBindingChildText(text: body, id: 1),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('WinToast show failed: $e');
+    }
   }
 
   Future<void> _quit() async {

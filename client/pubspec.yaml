@@ -39,6 +39,7 @@ dependencies:
   flutter_linkify: ^6.0.0
   system_tray: ^0.1.1
   window_manager: ^0.5.2
+  win_toast: ^0.4.0
 
 dev_dependencies:
   flutter_test:
@@ -53,3 +54,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
+    - assets/tray_icon.ico

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
+import 'package:uphone_client/core/notifications/notification_service.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 
@@ -234,6 +235,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
           final alreadyHas = state.messages.any((m) => m.id == msg.id);
           if (!alreadyHas) {
             _addMessage(msg);
+            if (msg.senderId != currentUserId) {
+              final senderName = msg.sender?.displayName ?? msg.sender?.username ?? 'Новое сообщение';
+              final text = msg.type == 'text' ? (msg.content ?? '') : '[${msg.type}]';
+              final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+              NotificationService.instance.showNewMessageNotification(senderName, preview);
+            }
           } else {
             _updateChatLastMessage(msg);
           }
