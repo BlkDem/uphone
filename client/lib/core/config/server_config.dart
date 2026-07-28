@@ -39,6 +39,7 @@ class ServerConfig {
           name: 'Default Server',
           host: AppConfig.defaultHost,
           port: AppConfig.defaultPort,
+          useTls: AppConfig.apiBaseUrl.startsWith('https'),
         ),
       ];
     }

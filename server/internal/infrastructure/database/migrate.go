@@ -32,12 +32,25 @@ func Migrate(db *sql.DB) error {
 				continue
 			}
 			if _, err := db.Exec(stmt); err != nil {
+				// ignore "already exists" errors for idempotent migrations
+				if isIgnorableError(err) {
+					continue
+				}
 				return fmt.Errorf("run migration statement from %s: %s: %w", migrationPath, truncate(stmt, 100), err)
 			}
 		}
 	}
 
 	return nil
+}
+
+func isIgnorableError(err error) bool {
+	msg := err.Error()
+	// MySQL error codes for duplicate objects
+	return strings.Contains(msg, "Error 1050") ||  // table already exists
+		strings.Contains(msg, "Error 1061") ||       // duplicate key name
+		strings.Contains(msg, "Error 1060") ||        // duplicate column name
+		strings.Contains(msg, "already exists")
 }
 
 func splitStatements(sql string) []string {

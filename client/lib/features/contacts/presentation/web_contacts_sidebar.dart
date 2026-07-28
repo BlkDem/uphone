@@ -5,6 +5,7 @@ import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/chat/presentation/chat_list_screen.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
+import 'package:uphone_client/features/contacts/presentation/contact_form_screen.dart';
 
 class WebChatSidebar extends ConsumerStatefulWidget {
   const WebChatSidebar({super.key});
@@ -190,46 +191,72 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
         content: SizedBox(
           width: 350,
           height: 400,
-          child: contactsState.contacts.isEmpty
-              ? const Center(child: Text('No contacts'))
-              : ListView.builder(
-                  itemCount: contactsState.contacts.length,
-                  itemBuilder: (context, index) {
-                    final c = contactsState.contacts[index];
-                    return ListTile(
-                      dense: true,
-                      leading: CircleAvatar(
-                        radius: 18,
-                        backgroundImage: c.avatarUrl != null && c.avatarUrl!.isNotEmpty
-                            ? NetworkImage(c.avatarUrl!)
-                            : null,
-                        child: c.avatarUrl == null || c.avatarUrl!.isEmpty
-                            ? Text(c.displayName.isNotEmpty ? c.displayName[0].toUpperCase() : '?')
-                            : null,
+          child: Column(
+            children: [
+              Expanded(
+                child: contactsState.contacts.isEmpty
+                    ? const Center(child: Text('No contacts'))
+                    : ListView.builder(
+                        itemCount: contactsState.contacts.length,
+                        itemBuilder: (context, index) {
+                          final c = contactsState.contacts[index];
+                          return ListTile(
+                            dense: true,
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundImage: c.avatarUrl != null && c.avatarUrl!.isNotEmpty
+                                  ? NetworkImage(c.avatarUrl!)
+                                  : null,
+                              child: c.avatarUrl == null || c.avatarUrl!.isEmpty
+                                  ? Text(c.displayName.isNotEmpty ? c.displayName[0].toUpperCase() : '?')
+                                  : null,
+                            ),
+                            title: Text(c.displayName),
+                            subtitle: Text(c.email ?? ''),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              try {
+                                await ref.read(chatProvider.notifier).createPersonalChat(c.email ?? '');
+                                if (context.mounted) {
+                                  final chats = ref.read(chatProvider).chats;
+                                  if (chats.isNotEmpty) {
+                                    context.go('/chats/${chats.last.id}');
+                                  }
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Failed to start chat: $e')),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
                       ),
-                      title: Text(c.displayName),
-                      subtitle: Text(c.email ?? ''),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        try {
-                          await ref.read(chatProvider.notifier).createPersonalChat(c.email ?? '');
-                          if (context.mounted) {
-                            final chats = ref.read(chatProvider).chats;
-                            if (chats.isNotEmpty) {
-                              context.go('/chats/${chats.last.id}');
-                            }
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to start chat: $e')),
-                            );
-                          }
-                        }
-                      },
-                    );
-                  },
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.person_add, size: 18),
+                    label: const Text('Add Contact'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ContactFormScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
