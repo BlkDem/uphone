@@ -33,6 +33,7 @@ class CallScreen extends ConsumerStatefulWidget {
 class _CallScreenState extends ConsumerState<CallScreen> {
   bool _isMuted = false;
   bool _isVideoOff = false;
+  bool _isSpeakerOn = false;
   String _callStatus = 'Connecting...';
   bool _callEnded = false;
   StreamSubscription<MediaStream>? _localSub;
@@ -47,6 +48,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void initState() {
     super.initState();
     _callStatus = widget.isIncoming ? 'Incoming call...' : 'Ringing...';
+    if (widget.callType == 'video') {
+      Helper.setSpeakerphoneOn(true);
+      _isSpeakerOn = true;
+    }
     _listenStreams();
   }
 
@@ -158,6 +163,11 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void _toggleCamera() {
     ref.read(webRTCServiceProvider).toggleCamera();
     setState(() => _isVideoOff = !_isVideoOff);
+  }
+
+  void _toggleSpeaker() {
+    Helper.setSpeakerphoneOn(!_isSpeakerOn);
+    setState(() => _isSpeakerOn = !_isSpeakerOn);
   }
 
   @override
@@ -385,6 +395,13 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           label: _isMuted ? 'Unmute' : 'Mute',
           onTap: _toggleMute,
           color: _isMuted ? colorScheme.error : colorScheme.onSurface,
+        ),
+        const SizedBox(width: 32),
+        _ControlButton(
+          icon: _isSpeakerOn ? Icons.volume_up : Icons.hearing,
+          label: _isSpeakerOn ? 'Speaker' : 'Earpiece',
+          onTap: _toggleSpeaker,
+          color: _isSpeakerOn ? colorScheme.primary : colorScheme.onSurface,
         ),
         if (widget.callType == 'video') ...[
           const SizedBox(width: 32),
