@@ -143,6 +143,7 @@ class _IncomingCallListenerState
 
   void _acceptFromNotification(NotificationAction action) {
     NotificationService.cancelCallNotification(callId: action.callId);
+    _closeIncomingCallScreen();
     final webrtc = ref.read(webRTCServiceProvider);
     webrtc.acceptCall(
       action.callId,
@@ -150,22 +151,25 @@ class _IncomingCallListenerState
       callType: action.callType,
       isGroup: action.isGroup,
     );
-    _isShowingIncomingCall = false;
     final navKey = ref.read(navigatorKeyProvider);
     final navigator = navKey.currentState;
     if (navigator == null) return;
-    navigator.push(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          callId: action.callId,
-          remoteUserId: action.fromUserId,
-          remoteUserName: action.fromName ?? 'Unknown',
-          callType: action.callType,
-          isIncoming: true,
-          isGroup: action.isGroup,
+    try {
+      navigator.pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            callId: action.callId,
+            remoteUserId: action.fromUserId,
+            remoteUserName: action.fromName ?? 'Unknown',
+            callType: action.callType,
+            isIncoming: true,
+            isGroup: action.isGroup,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('AcceptFromNotification push failed: $e');
+    }
   }
 
   void _rejectFromNotification(NotificationAction action) {

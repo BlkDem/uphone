@@ -63,6 +63,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       if (!_localRendererReady) {
         try {
           await _localRenderer.initialize();
+          if (!mounted) return;
         } catch (e) {
           debugPrint('Failed to init local renderer: $e');
           return;
