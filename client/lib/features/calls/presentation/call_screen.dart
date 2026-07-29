@@ -117,20 +117,27 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           if (_callEnded || event.callId != widget.callId) break;
           _callEnded = true;
           setState(() => _callStatus = 'Call rejected');
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) Navigator.of(context).pop();
-          });
+          _popAfterDelay();
           break;
         case CallEndedEvent():
           if (_callEnded || event.callId != widget.callId) break;
           _callEnded = true;
           setState(() => _callStatus = 'Call ended');
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) Navigator.of(context).pop();
-          });
+          _popAfterDelay();
           break;
         default:
           break;
+      }
+    });
+  }
+
+  void _popAfterDelay() {
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      try {
+        Navigator.of(context).pop();
+      } catch (e) {
+        debugPrint('CallScreen pop error: $e');
       }
     });
   }

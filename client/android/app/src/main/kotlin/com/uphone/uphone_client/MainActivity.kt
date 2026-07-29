@@ -25,6 +25,9 @@ class MainActivity : FlutterActivity() {
         @Volatile
         var isInForeground = false
             private set
+
+        @Volatile
+        var callChannel: MethodChannel? = null
     }
 
     private var ringtone: Ringtone? = null
@@ -90,8 +93,10 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        callChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.uphone/call_screen")
-        callChannel?.setMethodCallHandler { call, result ->
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.uphone/call_screen").also { ch ->
+            callChannel = ch
+            Companion.callChannel = ch
+        }.setMethodCallHandler { call, result ->
             when (call.method) {
                 "showOverLockScreen" -> {
                     showOverLockScreen()
@@ -267,6 +272,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         stopRingtone()
+        Companion.callChannel = null
+        callChannel = null
         super.onDestroy()
     }
 }

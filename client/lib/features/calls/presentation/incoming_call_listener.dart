@@ -111,6 +111,13 @@ class _IncomingCallListenerState
         _closeIncomingCallScreen();
         NotificationService.cancelCallNotification(callId: action.callId);
         _clearPending();
+        if (ref.read(webRTCServiceProvider).currentCallId != null) {
+          final navKey = ref.read(navigatorKeyProvider);
+          final navigator = navKey.currentState;
+          if (navigator != null && navigator.canPop()) {
+            navigator.pop();
+          }
+        }
       } else if (action.action == 'MISSED_CALL') {
         _handleMissedCall(action);
       }
@@ -201,11 +208,14 @@ class _IncomingCallListenerState
   }
 
   void _closeIncomingCallScreen() {
+    if (!_isShowingIncomingCall) return;
     _isShowingIncomingCall = false;
     final navKey = ref.read(navigatorKeyProvider);
     final navigator = navKey.currentState;
     if (navigator != null && navigator.canPop()) {
-      navigator.popUntil((route) => route.isFirst);
+      try {
+        navigator.pop();
+      } catch (_) {}
     }
   }
 
@@ -234,23 +244,28 @@ class _IncomingCallListenerState
     required bool isIncoming,
     required bool isGroup,
   }) {
+    final replaceTop = _isShowingIncomingCall;
     _isShowingIncomingCall = false;
     final navKey = ref.read(navigatorKeyProvider);
     final navigator = navKey.currentState;
     if (navigator == null) return;
 
-    navigator.pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          callId: callId,
-          remoteUserId: remoteUserId,
-          remoteUserName: remoteUserName,
-          callType: callType,
-          isIncoming: isIncoming,
-          isGroup: isGroup,
-        ),
+    final route = MaterialPageRoute(
+      builder: (_) => CallScreen(
+        callId: callId,
+        remoteUserId: remoteUserId,
+        remoteUserName: remoteUserName,
+        callType: callType,
+        isIncoming: isIncoming,
+        isGroup: isGroup,
       ),
     );
+
+    if (replaceTop) {
+      navigator.pushReplacement(route);
+    } else {
+      navigator.push(route);
+    }
   }
 
   @override

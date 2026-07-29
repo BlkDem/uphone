@@ -340,13 +340,18 @@ class WsKeepAliveService : Service() {
             nm.cancel(CallOverlayService.NOTIFICATION_ID)
         } catch (_: Exception) {}
 
-        if (MainActivity.isInForeground) {
-            val intent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra("call_action", "END")
-                putExtra("call_id", callId)
-            }
-            try { startActivity(intent) } catch (_: Exception) {}
+        val data = mapOf(
+            "call_action" to "END",
+            "call_id" to callId,
+            "from_user" to "",
+            "from_name" to "",
+            "call_type" to "",
+            "is_group" to "false"
+        )
+        try {
+            MainActivity.callChannel?.invokeMethod("onCallIntent", data)
+        } catch (e: Exception) {
+            debugLog(this, "MethodChannel call failed: ${e.message}")
         }
     }
 
