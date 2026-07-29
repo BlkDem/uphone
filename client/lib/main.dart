@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'core/config/server_config.dart';
 import 'core/config/app_settings.dart';
-import 'core/network/ws_client.dart';
 import 'core/network/ws_service_bridge.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/platform/windows_tray_service.dart';
@@ -23,10 +22,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ServerConfig.instance.load();
   await AppSettings.getInstance();
-  GoogleSignIn.instance.initialize();
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    GoogleSignIn.instance.initialize();
+  }
+
+  // Initialize Firebase (required for FCM on Android)
+  await Firebase.initializeApp();
 
   // Initialize notifications
-  NotificationService.instance.initialize();
+  await NotificationService.instance.initialize();
 
   // Initialize Windows tray
   if (!kIsWeb && Platform.isWindows) {

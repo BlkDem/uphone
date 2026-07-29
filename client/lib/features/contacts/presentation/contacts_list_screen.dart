@@ -288,7 +288,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
     );
 
     try {
-      await webrtc.startCall(otherUserId, callType, chatId: chat.id);
+      await webrtc.startCall(otherUserId, callType, chatId: chat.id, fromName: authState.user?.displayName ?? authState.user?.username ?? '');
     } catch (e) {
       debugPrint('startCall failed: $e');
       if (mounted) {

@@ -98,4 +98,13 @@ class ApiClient {
   }
 
   Dio get dio => _dio;
+
+  Future<Map<String, dynamic>> getIceConfig() async {
+    try {
+      final response = await _dio.get('/api/v1/ice-config');
+      return response.data as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
 }

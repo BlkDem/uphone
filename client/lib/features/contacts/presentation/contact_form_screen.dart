@@ -212,8 +212,10 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
     final phone = _phoneController.text.trim();
     final notes = _notesController.text.trim();
 
+    bool success = false;
+
     if (_isEditing) {
-      await notifier.updateContact(
+      final result = await notifier.updateContact(
         widget.contact!.id,
         displayName: _nameController.text.trim(),
         email: email.isNotEmpty ? email : null,
@@ -221,20 +223,30 @@ class _ContactFormScreenState extends ConsumerState<ContactFormScreen> {
         notes: notes.isNotEmpty ? notes : null,
         avatarUrl: avatarUrl,
       );
+      success = result != null;
     } else {
-      await notifier.createContact(
+      final result = await notifier.createContact(
         displayName: _nameController.text.trim(),
         email: email.isNotEmpty ? email : null,
         phone: phone.isNotEmpty ? phone : null,
         notes: notes.isNotEmpty ? notes : null,
         avatarUrl: avatarUrl,
       );
+      success = result != null;
     }
 
     setState(() => _isLoading = false);
 
-    if (mounted) {
+    if (success && mounted) {
       Navigator.of(context).pop();
+    } else if (!success && mounted) {
+      final error = ref.read(contactsProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error ?? 'Failed to save contact'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

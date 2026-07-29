@@ -29,20 +29,30 @@ class ServerConfig {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
+
+    // Rebuild default server from compile-time AppConfig (survives cache)
+    final defaultServer = ServerEntry(
+      id: _defaultId,
+      name: 'Default Server',
+      host: AppConfig.defaultHost,
+      port: AppConfig.defaultPort,
+      useTls: AppConfig.apiBaseUrl.startsWith('https'),
+    );
+
     if (raw != null) {
       final list = jsonDecode(raw) as List;
       _servers = list.map((e) => ServerEntry.fromJson(e)).toList();
+      // Replace cached default with compile-time values
+      final idx = _servers.indexWhere((s) => s.id == _defaultId);
+      if (idx >= 0) {
+        _servers[idx] = defaultServer;
+      } else {
+        _servers.insert(0, defaultServer);
+      }
     } else {
-      _servers = [
-        ServerEntry(
-          id: _defaultId,
-          name: 'Default Server',
-          host: AppConfig.defaultHost,
-          port: AppConfig.defaultPort,
-          useTls: AppConfig.apiBaseUrl.startsWith('https'),
-        ),
-      ];
+      _servers = [defaultServer];
     }
+
     _selectedId = prefs.getString(_selectedKey) ?? _defaultId;
     if (!_servers.any((s) => s.id == _selectedId)) {
       _selectedId = _servers.first.id;

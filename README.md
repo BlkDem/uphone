@@ -214,11 +214,42 @@ flutter build apk --debug \
 
 # Release APK
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://<DOMAIN> \
-  --dart-define=WS_URL=wss://<DOMAIN>/ws
+  --dart-define=API_BASE_URL=https://up.umolab.ru \
+  --dart-define=WS_URL=wss://up.umolab.ru/ws
 ```
 
-APK: `client/build/app/outputs/flutter-apk/app-debug.apk`
+APK: `client/build/app/outputs/flutter-apk/app-release.apk`
+
+Установка на устройство:
+```bash
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+### Сборка Windows Desktop
+
+```bash
+cd client
+flutter pub get
+
+flutter build windows --release \
+  --dart-define=API_BASE_URL=https://up.umolab.ru \
+  --dart-define=WS_URL=wss://up.umolab.ru/ws
+```
+
+EXE: `client/build/windows/x64/runner/Release/uphone_client.exe`
+
+### Сборка Web
+
+```bash
+cd client
+flutter pub get
+
+flutter build web --release \
+  --dart-define=API_BASE_URL=https://up.umolab.ru \
+  --dart-define=WS_URL=wss://up.umolab.ru/ws
+```
+
+Web: `client/build/web/`
 
 ## Рекомендации по железу
 

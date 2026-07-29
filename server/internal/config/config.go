@@ -18,6 +18,9 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+	TurnURL        string
+	TurnUser       string
+	TurnPass       string
 }
 
 type DBConfig struct {
@@ -48,6 +51,9 @@ func Load() *Config {
 		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", ""),
 		MinIOBucket:    getEnv("MINIO_BUCKET", "uphone-uploads"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "") == "true",
+		TurnURL:        getEnv("TURN_URL", ""),
+		TurnUser:       getEnv("TURN_USER", ""),
+		TurnPass:       getEnv("TURN_PASS", ""),
 	}
 }
 

@@ -6,10 +6,10 @@ services:
     container_name: uphone-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-uphone_root}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME:-uphone}
       MYSQL_USER: ${DB_USER:-uphone}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-uphone_secret}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3308:3306"
     volumes:
@@ -33,21 +33,33 @@ services:
       DB_HOST: mariadb
       DB_PORT: 3306
       DB_USER: ${DB_USER:-uphone}
-      DB_PASSWORD: ${DB_PASSWORD:-uphone_secret}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-uphone}
       SERVER_PORT: ${SERVER_PORT:-8080}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      UPLOAD_BASE_URL: http://192.168.1.18:8080
+      JWT_SECRET: ${JWT_SECRET}
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://localhost:8080}
       FCM_CREDENTIALS: /app/service-account.json
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-uphone_minio}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-uphone_minio_secret}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: uphone-uploads
       MINIO_USE_SSL: "false"
+      TURN_URL: ${TURN_URL:-}
+      TURN_USER: ${TURN_USER:-}
+      TURN_PASS: ${TURN_PASS:-}
     ports:
       - "8080:8080"
     volumes:
       - ../server/service-account.json:/app/service-account.json:ro
+
+  # To add Coturn TURN/STUN server for Docker:
+  #   docker run -d --name uphone-turn --network host \
+  #     -e TURN_PORT=3478 \
+  #     -e TURN_USERNAME=uphone \
+  #     -e TURN_PASSWORD=your-secret \
+  #     -e TURN_REALM=your-domain.com \
+  #     instrumentisto/coturn:latest
+  # Then set TURN_URL=turn:your-domain.com:3478 in server env
 
   minio:
     image: minio/minio:latest
@@ -56,7 +68,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-uphone_minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-uphone_minio_secret}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"

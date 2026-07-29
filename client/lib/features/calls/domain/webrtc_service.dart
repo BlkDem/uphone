@@ -35,12 +35,25 @@ class WebRTCService {
       StreamController<RemoteStreamEvent>.broadcast();
   Stream<RemoteStreamEvent> get remoteStreamEvents => _remoteStreamController.stream;
 
-  static const _iceServers = {
+  Map<String, dynamic> _iceServers = {
     'iceServers': [
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
+      {
+        'urls': <String>[
+          'stun:stun.l.google.com:19302',
+          'stun:stun1.l.google.com:19302',
+          'stun:stun2.l.google.com:19302',
+        ],
+      },
     ],
   };
+
+  Map<String, dynamic> get iceConfig => _iceServers;
+
+  void updateIceServers(Map<String, dynamic> config) {
+    if (config['iceServers'] is List && (config['iceServers'] as List).isNotEmpty) {
+      _iceServers = config;
+    }
+  }
 
   WebRTCService(this._wsClient);
 
@@ -59,6 +72,16 @@ class WebRTCService {
     switch (type) {
       case 'call-request':
       case 'call-invite':
+        if (callId != null && fromUser != null && payload is Map<String, dynamic>) {
+          _callEventController.add(IncomingCallEvent(
+            callId: callId,
+            fromUserId: fromUser,
+            fromName: payload['from_name'] as String? ?? '',
+            callType: payload['call_type'] as String? ?? 'audio',
+            chatName: payload['chat_name'] as String?,
+            isGroup: type == 'call-invite' || payload['participants'] != null,
+          ));
+        }
         break;
 
       case 'call-join':
@@ -142,7 +165,7 @@ class WebRTCService {
     }
   }
 
-  Future<void> startCall(String toUserId, String callType, {String chatId = ''}) async {
+  Future<void> startCall(String toUserId, String callType, {String chatId = '', String fromName = ''}) async {
     _isGroupCall = false;
     _chatId = chatId;
     final callId = 'call-${DateTime.now().millisecondsSinceEpoch}';
@@ -164,7 +187,7 @@ class WebRTCService {
       'payload': {
         'call_type': callType,
         'chat_id': chatId,
-        'from_name': '',
+        'from_name': fromName,
       },
     });
   }

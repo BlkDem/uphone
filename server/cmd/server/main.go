@@ -161,6 +161,8 @@ func main() {
 			api.HandleFunc("GET /contacts/{id}", contactsHandler.Get)
 			api.HandleFunc("PUT /contacts/{id}", contactsHandler.Update)
 			api.HandleFunc("DELETE /contacts/{id}", contactsHandler.Delete)
+
+			api.HandleFunc("GET /ice-config", webrtc.NewICEConfigHandler(cfg.TurnURL, cfg.TurnUser, cfg.TurnPass))
 		})
 	})
 

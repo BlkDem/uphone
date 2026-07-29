@@ -42,39 +42,29 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final Map<String, RTCVideoRenderer> _remoteRenderers = {};
   bool _localRendererReady = false;
-  MediaStream? _pendingLocalStream;
 
   @override
   void initState() {
     super.initState();
     _callStatus = widget.isIncoming ? 'Incoming call...' : 'Ringing...';
-    _initRenderers();
     _listenStreams();
-  }
-
-  Future<void> _initRenderers() async {
-    await _localRenderer.initialize();
-    if (mounted) {
-      setState(() {
-        _localRendererReady = true;
-        if (_pendingLocalStream != null) {
-          _localRenderer.srcObject = _pendingLocalStream;
-          _pendingLocalStream = null;
-        }
-      });
-    }
   }
 
   void _listenStreams() {
     final webrtc = ref.read(webRTCServiceProvider);
 
-    _localSub = webrtc.localStreamEvents.listen((stream) {
+    _localSub = webrtc.localStreamEvents.listen((stream) async {
       if (!mounted) return;
-      if (_localRendererReady) {
-        setState(() => _localRenderer.srcObject = stream);
-      } else {
-        _pendingLocalStream = stream;
+      if (!_localRendererReady) {
+        try {
+          await _localRenderer.initialize();
+        } catch (e) {
+          debugPrint('Failed to init local renderer: $e');
+          return;
+        }
+        _localRendererReady = true;
       }
+      setState(() => _localRenderer.srcObject = stream);
     });
 
     _remoteSub = webrtc.remoteStreamEvents.listen((event) async {

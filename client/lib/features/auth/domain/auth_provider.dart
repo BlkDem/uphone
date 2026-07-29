@@ -4,10 +4,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uphone_client/core/network/api_client.dart';
 import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/core/config/server_config.dart';
+import 'package:uphone_client/core/providers.dart';
 import 'package:uphone_client/core/notifications/notification_service.dart';
 import 'package:uphone_client/shared/models/user.dart';
 import 'package:uphone_client/features/auth/data/auth_repository.dart';
+import 'package:uphone_client/features/calls/domain/webrtc_service.dart';
 import 'package:uphone_client/core/network/ws_service_bridge.dart';
+
+export 'package:uphone_client/core/providers.dart' show apiClientProvider, wsClientProvider;
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading }
 
@@ -35,14 +39,6 @@ class AuthState {
   }
 }
 
-final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(ServerConfig.instance.apiBaseUrl);
-});
-
-final wsClientProvider = Provider<WsClient>((ref) {
-  return WsClient();
-});
-
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.read(apiClientProvider).dio);
 });
@@ -56,11 +52,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final ApiClient _apiClient;
   final WsClient _wsClient;
   final GoogleSignIn _googleSignIn;
+  final WebRTCService _webRTCService;
   bool _googleListenerSetup = false;
 
-  AuthNotifier(this._repository, this._apiClient, this._wsClient, this._googleSignIn)
+  AuthNotifier(this._repository, this._apiClient, this._wsClient, this._googleSignIn, this._webRTCService)
       : super(const AuthState()) {
     _setupGoogleListener();
+  }
+
+  Future<void> _fetchIceConfig() async {
+    try {
+      final iceConfig = await _apiClient.getIceConfig();
+      if (iceConfig.isNotEmpty) {
+        _webRTCService.updateIceServers(iceConfig);
+      }
+    } catch (_) {}
   }
 
   void _setupGoogleListener() {
@@ -90,6 +96,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _apiClient.setTokens(response.accessToken, response.refreshToken);
       NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
+      _fetchIceConfig();
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -119,6 +126,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _apiClient.setTokens(response.accessToken, response.refreshToken);
       NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
+      _fetchIceConfig();
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -144,6 +152,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _apiClient.setTokens(response.accessToken, response.refreshToken);
       NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
+      _fetchIceConfig();
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -219,6 +228,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _apiClient.setTokens(response.accessToken, response.refreshToken);
       NotificationService.instance.setAuth(response.accessToken, response.user.id);
       _connectWs(response.accessToken);
+      _fetchIceConfig();
       state = AuthState(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -254,5 +264,6 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
     ref.read(apiClientProvider),
     ref.read(wsClientProvider),
     ref.read(googleSignInProvider),
+    ref.read(webRTCServiceProvider),
   );
 });

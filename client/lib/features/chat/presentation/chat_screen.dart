@@ -697,7 +697,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     try {
-      await webrtc.startCall(otherUserId, callType, chatId: widget.chatId);
+      await webrtc.startCall(otherUserId, callType, chatId: widget.chatId, fromName: authState.user?.displayName ?? authState.user?.username ?? '');
     } catch (e) {
       debugPrint('startCall failed: $e');
       if (mounted) {

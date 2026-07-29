@@ -3,27 +3,34 @@ set -euo pipefail
 
 # ============================================================
 # UPhone Messenger - Production Deployment Script
-# Target: Ubuntu/Debian
+# Target: Ubuntu/Debian (FastPanel nginx / standalone Apache)
 #
 # Usage:
-#   sudo bash deploy.sh                        # Full deploy (server + web + Apache)
-#   sudo bash deploy.sh --server-only          # Server only (Go + MariaDB + systemd)
-#   sudo bash deploy.sh --web-only             # Web client only (Flutter + Apache)
-#   sudo bash deploy.sh --server-only --no-minio   # Server without MinIO
-#   sudo bash deploy.sh --skip-flutter-build   # Deploy everything except Flutter web build
-#   sudo bash deploy.sh --domain=chat.example.com  # With SSL + custom domain
+#   sudo bash deploy.sh                              # Full deploy (server + web + nginx)
+#   sudo bash deploy.sh --server-only                # Server only (Go + MySQL + systemd)
+#   sudo bash deploy.sh --web-only                   # Web client only (Flutter + nginx)
+#   sudo bash deploy.sh --server-only --no-minio     # Server without MinIO
+#   sudo bash deploy.sh --apache                     # Use Apache instead of nginx
+#   sudo bash deploy.sh --skip-flutter-build         # Deploy everything except Flutter web build
+#   sudo bash deploy.sh --domain=up.example.com      # With SSL + custom domain
 #
 # Flags:
-#   --server-only         Install only Go server, MariaDB, systemd (no Flutter, no Apache)
-#   --web-only            Install only Flutter web client + Apache (no Go, no MariaDB, no MinIO)
+#   --server-only         Install only Go server, MySQL, systemd (no Flutter, no nginx)
+#   --web-only            Install only Flutter web client + nginx (no Go, no MySQL, no MinIO)
 #   --skip-flutter        Skip Flutter SDK installation (implies --skip-flutter-build)
 #   --skip-flutter-build  Skip Flutter web build only (Flutter SDK still installed)
-#   --skip-apache         Skip Apache2 configuration
-#   --skip-db             Skip MariaDB installation/setup
+#   --skip-nginx          Skip nginx configuration
+#   --apache              Use Apache2 instead of nginx
+#   --skip-db             Skip MySQL installation/setup
 #   --no-minio            Disable MinIO (use local filesystem for uploads)
 #   --minio-only          Install only MinIO (useful for adding to existing setup)
 #   --domain=DOMAIN       Enable HTTPS via Let's Encrypt for DOMAIN
+#   --non-interactive     Skip all prompts, use auto-generated secrets
 #   --help                Show this help message
+#
+# Interactive prompts:
+#   Script will prompt for DB_PASSWORD, JWT_SECRET, MINIO_ROOT_PASSWORD,
+#   and FCM_CREDENTIALS path. Use --non-interactive to auto-generate all.
 # ============================================================
 
 APP_NAME="uphone"
@@ -42,15 +49,23 @@ SERVER_ONLY=false
 WEB_ONLY=false
 SKIP_FLUTTER=false
 SKIP_FLUTTER_BUILD=false
-SKIP_APACHE=false
+SKIP_NGINX=false
+USE_APACHE=false
 SKIP_DB=false
 USE_MINIO=true
 MINIO_ONLY=false
+NON_INTERACTIVE=false
 DEPLOYED_DOMAIN=""
 
 # MinIO defaults
 MINIO_ROOT_USER="uphone_minio"
 MINIO_ROOT_PASS=""
+
+# Interactive input storage
+DB_PASS_INPUT=""
+JWT_SECRET_INPUT=""
+MINIO_PASS_INPUT=""
+FCM_PATH_INPUT=""
 
 # ---- Parse arguments ----
 for arg in "$@"; do
@@ -63,10 +78,12 @@ for arg in "$@"; do
         --web-only)            WEB_ONLY=true ;;
         --skip-flutter)        SKIP_FLUTTER=true; SKIP_FLUTTER_BUILD=true ;;
         --skip-flutter-build)  SKIP_FLUTTER_BUILD=true ;;
-        --skip-apache)         SKIP_APACHE=true ;;
+        --skip-nginx)          SKIP_NGINX=true ;;
+        --apache)              USE_APACHE=true ;;
         --skip-db)             SKIP_DB=true ;;
         --no-minio)            USE_MINIO=false ;;
         --minio-only)          MINIO_ONLY=true ;;
+        --non-interactive)     NON_INTERACTIVE=true ;;
         --domain=*)            DEPLOYED_DOMAIN="${arg#*=}" ;;
         *) echo "Unknown option: $arg"; echo "Run with --help for usage"; exit 1 ;;
     esac
@@ -76,7 +93,7 @@ done
 if [[ "${SERVER_ONLY}" == "true" ]]; then
     SKIP_FLUTTER=true
     SKIP_FLUTTER_BUILD=true
-    SKIP_APACHE=true
+    SKIP_NGINX=true
 fi
 
 # --web-only implies several skips
@@ -85,14 +102,66 @@ if [[ "${WEB_ONLY}" == "true" ]]; then
     USE_MINIO=false
 fi
 
+# --apache overrides --skip-nginx
+if [[ "${USE_APACHE}" == "true" ]]; then
+    SKIP_NGINX=false
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 log()   { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+
+# ---- Interactive prompts for sensitive data ----
+prompt_secret() {
+    local var_name="$1"
+    local label="$2"
+    local default="$3"
+    local val
+
+    if [[ "${NON_INTERACTIVE}" == "true" ]]; then
+        echo "${default}"
+        return
+    fi
+
+    if [[ -n "${default}" ]]; then
+        read -s -p "${label} (leave empty for auto-generated): " val
+    else
+        read -s -p "${label}: " val
+    fi
+    echo
+    if [[ -z "${val}" ]]; then
+        echo "${default}"
+    else
+        echo "${val}"
+    fi
+}
+
+prompt_input() {
+    local label="$1"
+    local default="$2"
+    local val
+
+    if [[ "${NON_INTERACTIVE}" == "true" ]]; then
+        echo "${default}"
+        return
+    fi
+
+    read -p "${label} ${default:+[$default] }" val
+    echo "${val:-$default}"
+}
+
+if [[ "${NON_INTERACTIVE}" != "true" ]] && [[ "${SKIP_DB}" != "true" ]]; then
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}  UPhone Deployment — Credentials Setup${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+fi
 
 # ---- Pre-flight checks ----
 [[ $EUID -eq 0 ]] || error "Run as root: sudo bash deploy.sh"
@@ -101,9 +170,9 @@ DETECTED_IP=$(hostname -I | awk '{print $1}')
 log "Detected server IP: ${DETECTED_IP}"
 
 if [[ "${SERVER_ONLY}" == "true" ]]; then
-    log "Mode: SERVER ONLY (Go + MariaDB + MinIO + systemd)"
+    log "Mode: SERVER ONLY (Go + MySQL + MinIO + systemd)"
 elif [[ "${WEB_ONLY}" == "true" ]]; then
-    log "Mode: WEB ONLY (Flutter + Apache)"
+    log "Mode: WEB ONLY (Flutter + nginx)"
 elif [[ "${MINIO_ONLY}" == "true" ]]; then
     log "Mode: MINIO ONLY"
 fi
@@ -113,21 +182,21 @@ log "Installing system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 
-PKGS="git curl wget unzip build-essential"
+PKGS="git curl wget unzip build-essential nginx coturn"
 
 if [[ "${SKIP_DB}" != "true" ]]; then
-    PKGS="${PKGS} mariadb-server mariadb-client"
+    PKGS="${PKGS} mysql-server mysql-client"
 fi
 
-if [[ "${SKIP_APACHE}" != "true" ]]; then
-    PKGS="${PKGS} apache2 libapache2-mod-proxy-html libproxy-mod-proxy-wstunnel"
+if [[ "${USE_APACHE}" == "true" ]]; then
+    PKGS="${PKGS} apache2 libapache2-mod-proxy-html"
 fi
 
 apt-get install -y -qq ${PKGS}
 
-# Enable Apache modules
-if [[ "${SKIP_APACHE}" != "true" ]]; then
-    a2enmod proxy proxy_http proxy_wstunnel rewrite headers -qq
+# Enable Apache modules (only in --apache mode)
+if [[ "${USE_APACHE}" == "true" ]]; then
+    a2enmod proxy proxy_http proxy_wstunnel rewrite headers ssl -qq 2>/dev/null || true
 fi
 
 # ---- 2. Go (skip if --web-only) ----
@@ -164,12 +233,15 @@ else
     log "Skipping Flutter (--skip-flutter / --server-only)"
 fi
 
-# ---- 4. MariaDB (skip if --skip-db) ----
+# ---- 4. MySQL (skip if --skip-db) ----
 if [[ "${SKIP_DB}" != "true" ]]; then
-    log "Configuring MariaDB..."
-    systemctl enable --now mariadb
+    log "Configuring MySQL..."
+    systemctl enable --now mysql
 
-    DB_PASS="${DB_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)}"
+    # Prompt for DB password
+    AUTO_DB_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    DB_PASS_INPUT=$(prompt_secret "DB_PASSWORD" "MySQL password for '${DB_USER}'" "${AUTO_DB_PASS}")
+    DB_PASS="${DB_PASS_INPUT}"
 
     mysql -u root <<-EOSQL
         CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -181,11 +253,50 @@ if [[ "${SKIP_DB}" != "true" ]]; then
 EOSQL
     log "Database ready. User: ${DB_USER}, Pass: ${DB_PASS}"
 else
-    log "Skipping MariaDB (--skip-db)"
+    log "Skipping MySQL (--skip-db)"
     DB_PASS="${DB_PASSWORD:-}"
 fi
 
-# ---- 4b. MinIO (object storage) ----
+# ---- 4b. TURN/STUN server (Coturn) ----
+TURN_PORT=3478
+TURN_REALM="${DEPLOYED_DOMAIN:-${DETECTED_IP}}"
+TURN_USER="uphone"
+AUTO_TURN_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+TURN_PASS_INPUT=$(prompt_secret "TURN_PASSWORD" "Coturn password for user '${TURN_USER}'" "${AUTO_TURN_PASS}")
+TURN_PASS="${TURN_PASS_INPUT}"
+
+log "Configuring Coturn TURN/STUN server..."
+cat > /etc/turnserver.conf <<TURN
+# UPhone Coturn Configuration
+
+listening-port=${TURN_PORT}
+fingerprint
+lt-cred-mech
+user=${TURN_USER}:${TURN_PASS}
+realm=${TURN_REALM}
+total-quota=100
+bps-capacity=0
+stale-nonce=600
+
+# Relay port range (open these in firewall)
+min-port=49152
+max-port=65535
+
+# Logging
+log-file=/var/log/turnserver.log
+simple-log
+
+# No TLS (behind nginx reverse proxy, but TURN needs direct UDP)
+no-tls
+no-dtls
+TURN
+
+chmod 600 /etc/turnserver.conf
+
+systemctl enable --now coturn
+log "Coturn: running on port ${TURN_PORT} (TCP/UDP), realm=${TURN_REALM}"
+
+# ---- 4c. MinIO (object storage) ----
 MINIO_DATA_DIR="${DATA_DIR}/minio"
 MINIO_BUCKET="uphone-uploads"
 MINIO_PORT=9000
@@ -195,7 +306,9 @@ if [[ "${USE_MINIO}" == "true" ]]; then
     log "Installing MinIO..."
     mkdir -p "${MINIO_DATA_DIR}"
 
-    MINIO_ROOT_PASS="${MINIO_ROOT_PASS:-$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)}"
+    AUTO_MINIO_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    MINIO_PASS_INPUT=$(prompt_secret "MINIO_ROOT_PASSWORD" "MinIO root password" "${AUTO_MINIO_PASS}")
+    MINIO_ROOT_PASS="${MINIO_PASS_INPUT}"
 
     if ! command -v minio &>/dev/null; then
         cd /tmp
@@ -264,7 +377,9 @@ fi
 # ---- 5. Deploy application ----
 log "Deploying application..."
 mkdir -p "${DEPLOY_DIR}" "${DATA_DIR}/uploads" "${CONF_DIR}"
-[[ "${SKIP_APACHE}" != "true" ]] && mkdir -p "${WEB_DIR}"
+if [[ "${USE_APACHE}" == "true" ]] || [[ "${SKIP_NGINX}" != "true" ]]; then
+    mkdir -p "${WEB_DIR}"
+fi
 
 if [[ -d "${DEPLOY_DIR}/.git" ]]; then
     log "Pulling latest changes..."
@@ -304,20 +419,28 @@ if [[ "${SKIP_FLUTTER_BUILD}" != "true" ]] && [[ "${SKIP_FLUTTER}" != "true" ]];
     fi
 
     flutter build web \
-        --dart-define=API_BASE_URL=${BUILD_SCHEME}://${BUILD_HOST}/api/v1 \
+        --dart-define=API_BASE_URL=${BUILD_SCHEME}://${BUILD_HOST} \
         --dart-define=WS_URL=${BUILD_WS}://${BUILD_HOST}/ws
 
     rm -rf "${WEB_DIR:?}"/*
     cp -r build/web/* "${WEB_DIR}/"
 else
     log "Skipping Flutter web build"
-    if [[ "${SKIP_APACHE}" != "true" ]] && [[ ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
-        warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
+    if [[ "${USE_APACHE}" == "true" ]] || [[ "${SKIP_NGINX}" != "true" ]]; then
+        if [[ ! -f "${WEB_DIR}/flutter_bootstrap.js" ]]; then
+            warn "No Flutter web build found in ${WEB_DIR}. Copy build/web/ there manually."
+        fi
     fi
 fi
 
 # ---- 8. Configuration ----
-JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+AUTO_JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+JWT_SECRET_INPUT=$(prompt_secret "JWT_SECRET" "JWT signing secret" "${AUTO_JWT_SECRET}")
+JWT_SECRET="${JWT_SECRET_INPUT}"
+
+# Prompt for FCM credentials path
+FCM_PATH_INPUT=$(prompt_input "Firebase service account JSON path (leave empty to skip FCM)" "${CONF_DIR}/firebase-service-account.json")
+FCM_CREDENTIALS="${FCM_PATH_INPUT}"
 
 UPLOAD_BASE_URL="http://${DETECTED_IP}"
 if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
@@ -327,21 +450,35 @@ fi
 if [[ ! -f "${CONF_DIR}/uphone.env" ]]; then
     log "Creating environment file..."
     cat > "${CONF_DIR}/uphone.env" <<EOF
+# UPhone Server Configuration
+# This file contains sensitive credentials — keep secure!
+
+# Database
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=${DB_USER}
 DB_PASSWORD=${DB_PASS}
 DB_NAME=${DB_NAME}
+
+# Server
 SERVER_PORT=8080
 UPLOAD_DIR=${DATA_DIR}/uploads
 UPLOAD_BASE_URL=${UPLOAD_BASE_URL}
 JWT_SECRET=${JWT_SECRET}
-GOOGLE_CLIENT_ID=
-FCM_CREDENTIALS=${CONF_DIR}/firebase-service-account.json
+
+# TURN/STUN server (Coturn)
+TURN_URL=turn:${TURN_REALM}:${TURN_PORT}
+TURN_USER=${TURN_USER}
+TURN_PASS=${TURN_PASS}
+
+# Firebase Cloud Messaging (optional — leave empty to disable push)
+FCM_CREDENTIALS=${FCM_CREDENTIALS}
 EOF
 
     if [[ "${USE_MINIO}" == "true" ]]; then
         cat >> "${CONF_DIR}/uphone.env" <<EOF
+
+# MinIO / S3-compatible storage
 MINIO_ENDPOINT=127.0.0.1:${MINIO_PORT}
 MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
 MINIO_SECRET_KEY=${MINIO_ROOT_PASS}
@@ -352,19 +489,29 @@ EOF
 
     chmod 600 "${CONF_DIR}/uphone.env"
     log "Config written to ${CONF_DIR}/uphone.env"
-    log ">>> EDIT THIS FILE to set GOOGLE_CLIENT_ID and verify settings <<<"
 else
     warn "Config file exists at ${CONF_DIR}/uphone.env, skipping creation"
 fi
 
-# Copy Firebase service account if present in repo
-FIREBASE_JSON="${DEPLOY_DIR}/uphone-messenger-firebase-adminsdk-fbsvc-6766358e52.json"
-if [[ -f "${FIREBASE_JSON}" ]]; then
-    cp "${FIREBASE_JSON}" "${CONF_DIR}/firebase-service-account.json"
+# Copy Firebase service account if path was provided and file exists
+if [[ -n "${FCM_CREDENTIALS}" ]] && [[ "${FCM_CREDENTIALS}" != "${CONF_DIR}/firebase-service-account.json" ]]; then
+    if [[ -f "${FCM_CREDENTIALS}" ]]; then
+        cp "${FCM_CREDENTIALS}" "${CONF_DIR}/firebase-service-account.json"
+        chmod 600 "${CONF_DIR}/firebase-service-account.json"
+        log "Firebase service account copied to ${CONF_DIR}/firebase-service-account.json"
+        FCM_CREDENTIALS="${CONF_DIR}/firebase-service-account.json"
+    else
+        warn "Firebase service account not found at ${FCM_CREDENTIALS}, FCM push disabled"
+        FCM_CREDENTIALS=""
+    fi
+elif [[ -f "${DEPLOY_DIR}/uphone-messenger-firebase-adminsdk-fbsvc-6766358e52.json" ]]; then
+    cp "${DEPLOY_DIR}/uphone-messenger-firebase-adminsdk-fbsvc-6766358e52.json" "${CONF_DIR}/firebase-service-account.json"
     chmod 600 "${CONF_DIR}/firebase-service-account.json"
-    log "Firebase service account copied to ${CONF_DIR}/firebase-service-account.json"
+    log "Firebase service account copied from repo"
+    FCM_CREDENTIALS="${CONF_DIR}/firebase-service-account.json"
 else
-    warn "Firebase service account not found in repo, FCM push disabled"
+    warn "Firebase service account not found, FCM push disabled"
+    FCM_CREDENTIALS=""
 fi
 
 # ---- 9. Systemd service (skip if --web-only) ----
@@ -373,8 +520,8 @@ if [[ "${WEB_ONLY}" != "true" ]]; then
     cat > /etc/systemd/system/${APP_NAME}.service <<EOF
 [Unit]
 Description=UPhone Messenger Server
-After=network.target mariadb.service
-Wants=mariadb.service
+After=network.target mysql.service mariadb.service
+Wants=mysql.service
 
 [Service]
 Type=simple
@@ -398,24 +545,26 @@ else
     log "Skipping systemd service (--web-only)"
 fi
 
-# ---- 10. Apache virtual host (skip if --skip-apache or --server-only) ----
-if [[ "${SKIP_APACHE}" != "true" ]]; then
+# ---- 10. Web server configuration ----
+if [[ "${USE_APACHE}" == "true" ]]; then
+    # ---- 10a. Apache virtual host (--apache mode) ----
     log "Configuring Apache2..."
 
     SERVER_NAME="${DETECTED_IP}"
 
-    # Generate HTTP config
+    if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+        SERVER_NAME="${DEPLOYED_DOMAIN}"
+    fi
+
     cat > /etc/apache2/sites-available/${APP_NAME}.conf <<EOF
 <VirtualHost *:80>
     ServerName ${SERVER_NAME}
-
     DocumentRoot ${WEB_DIR}
 
     <Directory ${WEB_DIR}>
         Options -Indexes +FollowSymLinks
         AllowOverride All
         Require all granted
-
         RewriteEngine On
         RewriteBase /
         RewriteRule ^index\.html\$ - [L]
@@ -426,22 +575,18 @@ if [[ "${SKIP_APACHE}" != "true" ]]; then
 
     ProxyPreserveHost On
     ProxyRequests Off
-
     ProxyPass /api/ http://127.0.0.1:8080/api/
     ProxyPassReverse /api/ http://127.0.0.1:8080/api/
-
     ProxyPass /admin/ http://127.0.0.1:8080/admin/
     ProxyPassReverse /admin/ http://127.0.0.1:8080/admin/
     ProxyPass /admin http://127.0.0.1:8080/admin
     ProxyPassReverse /admin http://127.0.0.1:8080/admin
-
     ProxyPass /uploads/ http://127.0.0.1:8080/uploads/
     ProxyPassReverse /uploads/ http://127.0.0.1:8080/uploads/
 
     RewriteCond %{HTTP:Upgrade} =websocket [NC]
     RewriteCond %{HTTP:Connection} =upgrade [NC]
     RewriteRule ^/ws(.*) ws://127.0.0.1:8080/ws\$1 [P,L]
-
     ProxyPass /ws http://127.0.0.1:8080/ws
     ProxyPassReverse /ws http://127.0.0.1:8080/ws
 
@@ -450,89 +595,174 @@ if [[ "${SKIP_APACHE}" != "true" ]]; then
 </VirtualHost>
 EOF
 
-    # ---- 10b. Let's Encrypt SSL (optional) ----
+    a2dissite 000-default.conf -qq 2>/dev/null || true
+    a2ensite ${APP_NAME}.conf -qq
+    systemctl reload apache2
+
+elif [[ "${SKIP_NGINX}" != "true" ]]; then
+    # ---- 10b. nginx server block (default) ----
+    log "Configuring nginx..."
+
+    SERVER_NAME="${DETECTED_IP}"
+
+    if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
+        SERVER_NAME="${DEPLOYED_DOMAIN}"
+    fi
+
+    # Remove default site
+    rm -f /etc/nginx/sites-enabled/default
+
+    cat > /etc/nginx/sites-available/${APP_NAME}.conf <<NGINX
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+    client_max_body_size 100m;
+
+    root ${WEB_DIR};
+    index index.html;
+
+    # SPA fallback
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # WebSocket proxy
+    location /ws {
+        proxy_pass http://127.0.0.1:8080/ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 86400;
+    }
+
+    # API proxy
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Admin panel proxy
+    location /admin/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Uploads proxy with caching
+    location ^~ /uploads/ {
+        proxy_pass http://127.0.0.1:8080/uploads/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+NGINX
+
+    ln -sf /etc/nginx/sites-available/${APP_NAME}.conf /etc/nginx/sites-enabled/${APP_NAME}.conf
+    nginx -t && systemctl reload nginx
+
+    # ---- 10c. Let's Encrypt SSL (optional, nginx) ----
     if [[ -n "${DEPLOYED_DOMAIN}" ]]; then
         log "Setting up HTTPS for ${DEPLOYED_DOMAIN}..."
 
-        apt-get install -y -qq certbot python3-certbot-apache
+        apt-get install -y -qq certbot python3-certbot-nginx
 
         if [[ ! -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
             log "Obtaining SSL certificate for ${DEPLOYED_DOMAIN}..."
-            systemctl stop apache2 2>/dev/null || true
-            certbot certonly --standalone -d "${DEPLOYED_DOMAIN}" \
+            certbot --nginx -d "${DEPLOYED_DOMAIN}" \
                 --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
-                --preferred-challenges http || {
-                warn "certbot standalone failed, trying with apache plugin..."
-                systemctl start apache2 2>/dev/null || true
-                certbot --apache -d "${DEPLOYED_DOMAIN}" \
-                    --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" \
-                    --redirect --hsts || true
+                --redirect --hsts || {
+                warn "certbot --nginx failed, trying standalone..."
+                systemctl stop nginx 2>/dev/null || true
+                certbot certonly --standalone -d "${DEPLOYED_DOMAIN}" \
+                    --non-interactive --agree-tos --email "admin@${DEPLOYED_DOMAIN}" || true
+                systemctl start nginx 2>/dev/null || true
             }
-            systemctl start apache2 2>/dev/null || true
         fi
 
         if [[ -f "/etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem" ]]; then
-            cat > /etc/apache2/sites-available/${APP_NAME}-ssl.conf <<SSLEOF
-<VirtualHost *:443>
-    ServerName ${DEPLOYED_DOMAIN}
+            if ! grep -q "ssl_certificate" /etc/nginx/sites-available/${APP_NAME}.conf; then
+                # Re-generate with SSL if certbot didn't modify it
+                cat > /etc/nginx/sites-available/${APP_NAME}.conf <<NGINXSSL
+server {
+    listen 80;
+    server_name ${DEPLOYED_DOMAIN};
+    return 301 https://\$host\$request_uri;
+}
 
-    DocumentRoot ${WEB_DIR}
+server {
+    listen 443 ssl http2;
+    server_name ${DEPLOYED_DOMAIN};
+    client_max_body_size 100m;
 
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/privkey.pem
+    ssl_certificate /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DEPLOYED_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
-    <Directory ${WEB_DIR}>
-        Options -Indexes +FollowSymLinks
-        AllowOverride All
-        Require all granted
+    root ${WEB_DIR};
+    index index.html;
 
-        RewriteEngine On
-        RewriteBase /
-        RewriteRule ^index\.html\$ - [L]
-        RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteCond %{REQUEST_FILENAME} !-d
-        RewriteRule . /index.html [L]
-    </Directory>
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
 
-    ProxyPreserveHost On
-    ProxyRequests Off
+    location /ws {
+        proxy_pass http://127.0.0.1:8080/ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 86400;
+    }
 
-    ProxyPass /api/ http://127.0.0.1:8080/api/
-    ProxyPassReverse /api/ http://127.0.0.1:8080/api/
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
 
-    ProxyPass /admin/ http://127.0.0.1:8080/admin/
-    ProxyPassReverse /admin/ http://127.0.0.1:8080/admin/
-    ProxyPass /admin http://127.0.0.1:8080/admin
-    ProxyPassReverse /admin http://127.0.0.1:8080/admin
+    location /admin/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
 
-    ProxyPass /uploads/ http://127.0.0.1:8080/uploads/
-    ProxyPassReverse /uploads/ http://127.0.0.1:8080/uploads/
-
-    RewriteCond %{HTTP:Upgrade} =websocket [NC]
-    RewriteCond %{HTTP:Connection} =upgrade [NC]
-    RewriteRule ^/ws(.*) ws://127.0.0.1:8080/ws\$1 [P,L]
-
-    ProxyPass /ws http://127.0.0.1:8080/ws
-    ProxyPassReverse /ws http://127.0.0.1:8080/ws
-
-    ErrorLog \${APACHE_LOG_DIR}/uphone_ssl_error.log
-    CustomLog \${APACHE_LOG_DIR}/uphone_ssl_access.log combined
-</VirtualHost>
-SSLEOF
-
-            a2enmod ssl -qq
-            a2ensite ${APP_NAME}-ssl.conf -qq
-
-            cat > /etc/apache2/sites-available/${APP_NAME}.conf <<REDIR
-<VirtualHost *:80>
-    ServerName ${DEPLOYED_DOMAIN}
-    Redirect permanent / https://${DEPLOYED_DOMAIN}/
-</VirtualHost>
-REDIR
+    location ^~ /uploads/ {
+        proxy_pass http://127.0.0.1:8080/uploads/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+NGINXSSL
+                nginx -t && systemctl reload nginx
+            fi
 
             if ! crontab -l 2>/dev/null | grep -q certbot; then
-                (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | crontab -
+                (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
                 log "Certbot auto-renewal cron job added"
             fi
 
@@ -541,12 +771,8 @@ REDIR
             warn "SSL certificate not found, HTTP-only mode"
         fi
     fi
-
-    a2dissite 000-default.conf -qq 2>/dev/null || true
-    a2ensite ${APP_NAME}.conf -qq
-    systemctl reload apache2
 else
-    log "Skipping Apache (--skip-apache / --server-only)"
+    log "Skipping web server configuration (--skip-nginx / --server-only)"
 fi
 
 # ---- 11. Firewall ----
@@ -554,10 +780,13 @@ if command -v ufw &>/dev/null; then
     log "Opening firewall ports..."
     ufw allow 22/tcp comment "SSH" >/dev/null 2>&1 || true
     ufw allow 8080/tcp comment "UPhone API" >/dev/null 2>&1 || true
-    if [[ "${SKIP_APACHE}" != "true" ]]; then
+    if [[ "${SKIP_NGINX}" != "true" ]] || [[ "${USE_APACHE}" == "true" ]]; then
         ufw allow 80/tcp comment "HTTP" >/dev/null 2>&1 || true
         ufw allow 443/tcp comment "HTTPS" >/dev/null 2>&1 || true
     fi
+    ufw allow ${TURN_PORT}/tcp comment "TURN TCP" >/dev/null 2>&1 || true
+    ufw allow ${TURN_PORT}/udp comment "TURN/STUN UDP" >/dev/null 2>&1 || true
+    ufw allow 49152:65535/udp comment "TURN relay" >/dev/null 2>&1 || true
 fi
 
 # ---- Done ----
@@ -575,11 +804,12 @@ echo "============================================"
 echo -e "${GREEN}  UPhone deployed successfully!${NC}"
 echo "============================================"
 echo ""
-if [[ "${SKIP_APACHE}" != "true" ]]; then
+if [[ "${SKIP_NGINX}" != "true" ]] || [[ "${USE_APACHE}" == "true" ]]; then
     echo "  Web client:  ${SCHEME}://${DISPLAY_HOST}"
     echo "  Admin panel: ${SCHEME}://${DISPLAY_HOST}/admin"
     echo "  API:         ${SCHEME}://${DISPLAY_HOST}/api/v1"
     echo "  WebSocket:   ${WS_SCHEME}://${DISPLAY_HOST}/ws"
+    echo "  TURN:        turn://${DISPLAY_HOST}:${TURN_PORT}"
 else
     echo "  API:         http://${DETECTED_IP}:8080/api/v1"
     echo "  WebSocket:   ws://${DETECTED_IP}:8080/ws"
@@ -587,24 +817,37 @@ fi
 echo ""
 echo "  Config:      ${CONF_DIR}/uphone.env"
 echo "  Logs:        journalctl -u ${APP_NAME} -f"
-if [[ "${SKIP_APACHE}" != "true" ]]; then
-    echo "  Apache logs: /var/log/apache2/uphone_*.log"
+if [[ "${USE_APACHE}" == "true" ]]; then
+    echo "  Web server:  Apache2 (logs: /var/log/apache2/uphone_*.log)"
+else
+    echo "  Web server:  nginx (logs: /var/log/nginx/uphone_*.log)"
 fi
 echo ""
-if [[ "${WEB_ONLY}" != "true" ]]; then
-    echo "  DB user:     ${DB_USER}"
-    echo "  DB pass:     ${DB_PASS}"
-fi
-if [[ "${USE_MINIO}" == "true" ]]; then
-    echo "  MinIO:       http://${DISPLAY_HOST}:${MINIO_PORT}"
-    echo "  MinIO console: http://${DISPLAY_HOST}:${MINIO_CONSOLE_PORT}"
-    echo "  MinIO bucket:  ${MINIO_BUCKET}"
+if [[ "${NON_INTERACTIVE}" != "true" ]]; then
+    echo -e "${YELLOW}  ──── Credentials ───────────────────────${NC}"
+    if [[ "${WEB_ONLY}" != "true" ]] && [[ "${SKIP_DB}" != "true" ]]; then
+        echo "  DB user:     ${DB_USER}"
+        echo "  DB pass:     ${DB_PASS}"
+    fi
+    echo "  TURN pass:   ${TURN_PASS}"
+    if [[ "${USE_MINIO}" == "true" ]]; then
+        echo "  MinIO user:  ${MINIO_ROOT_USER}"
+        echo "  MinIO pass:  ${MINIO_ROOT_PASS}"
+    fi
+    echo "  JWT secret:  ${JWT_SECRET}"
+    if [[ -n "${FCM_CREDENTIALS}" ]]; then
+        echo "  FCM creds:   ${FCM_CREDENTIALS}"
+    fi
+    echo -e "${YELLOW}  ─────────────────────────────────────────${NC}"
+    echo ""
+    echo -e "${RED}  ⚠  Save these credentials securely!${NC}"
+    echo ""
 fi
 echo ""
 if [[ "${SERVER_ONLY}" == "true" ]]; then
     echo "  To add web UI later: sudo bash deploy.sh --skip-db --no-minio"
 elif [[ "${WEB_ONLY}" == "true" ]]; then
-    echo "  To add server later: sudo bash deploy.sh --skip-flutter --skip-apache"
+    echo "  To add server later: sudo bash deploy.sh --skip-flutter --skip-nginx"
 else
     echo "  To update: cd ${DEPLOY_DIR} && git pull && sudo bash $0 [--skip-flutter-build] [--domain=example.com]"
 fi
