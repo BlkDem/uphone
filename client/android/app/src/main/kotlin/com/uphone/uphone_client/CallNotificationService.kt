@@ -19,6 +19,14 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
                 WsKeepAliveService.debugLog(this, "FCM: call $callId already handled, skipping")
                 return
             }
+
+            val km = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            if (MainActivity.isInForeground && !km.isKeyguardLocked) {
+                WsKeepAliveService.debugLog(this, "FCM: app in foreground & unlocked, WS handles it — skipping")
+                return
+            }
+
+            WsKeepAliveService.debugLog(this, "FCM: handling call $callId, starting overlay")
             launchCallOverlay(data)
             return
         }
@@ -34,12 +42,7 @@ class CallNotificationService : FlutterFirebaseMessagingService() {
         val callType = data["call_type"] ?: "video"
         val isGroup = data["type"] == "call-invite"
 
-        if (MainActivity.isInForeground) {
-            WsKeepAliveService.debugLog(this, "FCM: app in foreground, WS handles it — skipping")
-            return
-        }
-
-        WsKeepAliveService.debugLog(this, "FCM: handling call $callId, starting overlay")
+        WsKeepAliveService.debugLog(this, "FCM: launching overlay for call $callId")
 
         val overlayIntent = Intent(this, CallOverlayService::class.java).apply {
             putExtra("call_id", callId)

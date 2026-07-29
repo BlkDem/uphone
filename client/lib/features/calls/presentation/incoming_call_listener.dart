@@ -45,7 +45,6 @@ class _IncomingCallListenerState
     final pending =
         NotificationService.instance.consumePendingNativeCallIntent();
     if (pending != null && pending.callId.isNotEmpty) {
-      _ensureWsConnected();
       if (pending.action == 'SHOW') {
         _showIncomingCallFromNotification(pending);
       } else if (pending.action == 'ACCEPT') {
@@ -56,13 +55,18 @@ class _IncomingCallListenerState
     }
   }
 
-  void _ensureWsConnected() {
+  Future<void> _ensureWsConnected() async {
     final apiClient = ref.read(apiClientProvider);
     final wsClient = ref.read(wsClientProvider);
     final token = apiClient.accessToken;
-    if (token != null && !wsClient.isConnected) {
-      wsClient.reconnect();
+    if (token == null || token.isEmpty) return;
+    if (wsClient.isConnected) return;
+    wsClient.reconnect();
+    for (int i = 0; i < 50; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (wsClient.isConnected) return;
     }
+    debugPrint('_ensureWsConnected: timeout waiting for WS');
   }
 
   void _listen() {
@@ -85,7 +89,9 @@ class _IncomingCallListenerState
           _clearPending();
         }
       } else if (event is CallEndedEvent || event is CallRejectedEvent) {
-        _closeIncomingCallScreen();
+        if (_isShowingIncomingCall && event.callId == _pendingCallId) {
+          _closeIncomingCallScreen();
+        }
         NotificationService.cancelCallNotification(callId: event.callId);
         _clearPending();
       }
@@ -95,7 +101,6 @@ class _IncomingCallListenerState
   void _listenNotifications() {
     _notifSub = NotificationService.instance.actions.listen((action) {
       if (!mounted) return;
-      _ensureWsConnected();
       if (action.action == 'ACCEPT') {
         _acceptFromNotification(action);
       } else if (action.action == 'REJECT') {
@@ -125,7 +130,6 @@ class _IncomingCallListenerState
     _pendingIsGroup = action.isGroup;
 
     _isShowingIncomingCall = true;
-    NotificationService.showOverLockScreen();
     final route = MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => IncomingCallScreen(
@@ -141,9 +145,16 @@ class _IncomingCallListenerState
     });
   }
 
-  void _acceptFromNotification(NotificationAction action) {
+  Future<void> _acceptFromNotification(NotificationAction action) async {
     NotificationService.cancelCallNotification(callId: action.callId);
-    _closeIncomingCallScreen();
+    await _ensureWsConnected();
+    if (!mounted) return;
+    _isShowingIncomingCall = false;
+    _pendingCallId = action.callId;
+    _pendingRemoteUserId = action.fromUserId;
+    _pendingRemoteUserName = action.fromName ?? 'Unknown';
+    _pendingCallType = action.callType;
+    _pendingIsGroup = action.isGroup;
     final webrtc = ref.read(webRTCServiceProvider);
     webrtc.acceptCall(
       action.callId,
@@ -151,25 +162,6 @@ class _IncomingCallListenerState
       callType: action.callType,
       isGroup: action.isGroup,
     );
-    final navKey = ref.read(navigatorKeyProvider);
-    final navigator = navKey.currentState;
-    if (navigator == null) return;
-    try {
-      navigator.pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            callId: action.callId,
-            remoteUserId: action.fromUserId,
-            remoteUserName: action.fromName ?? 'Unknown',
-            callType: action.callType,
-            isIncoming: true,
-            isGroup: action.isGroup,
-          ),
-        ),
-      );
-    } catch (e) {
-      debugPrint('AcceptFromNotification push failed: $e');
-    }
   }
 
   void _rejectFromNotification(NotificationAction action) {
@@ -192,7 +184,6 @@ class _IncomingCallListenerState
     _pendingIsGroup = event.isGroup;
 
     _isShowingIncomingCall = true;
-    NotificationService.showOverLockScreen();
     final route = MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => IncomingCallScreen(

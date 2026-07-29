@@ -273,7 +273,6 @@ class WsKeepAliveService : Service() {
         val fromUser = msg.optString("from_user", "")
         val fromName = payload.optString("from_name", "Unknown")
         val callType = payload.optString("call_type", "video")
-        val chatId = payload.optString("chat_id", "")
         val isGroup = msg.optString("type", "") == "call-invite"
 
         if (callId.isEmpty()) {
@@ -296,15 +295,18 @@ class WsKeepAliveService : Service() {
             "uphone:incoming_call"
         )
         wakeLock.acquire(30_000L)
-        debugLog(this, "WakeLock acquired, app foreground=${MainActivity.isInForeground}")
 
-        if (MainActivity.isInForeground) {
-            debugLog(this, "App in foreground, forwarding to Flutter via intent")
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        val isLocked = km.isKeyguardLocked
+        debugLog(this, "WakeLock acquired, app foreground=${MainActivity.isInForeground}, locked=$isLocked")
+
+        if (MainActivity.isInForeground && !isLocked) {
+            debugLog(this, "App in foreground & unlocked, forwarding to Flutter via intent")
             fallbackToActivity(callId, fromUser, fromName, callType, isGroup)
             return
         }
 
-        debugLog(this, "App NOT in foreground, starting overlay")
+        debugLog(this, "App background or locked, starting overlay")
         val overlayIntent = Intent(this, CallOverlayService::class.java).apply {
             putExtra("call_id", callId)
             putExtra("from_user", fromUser)
@@ -356,10 +358,7 @@ class WsKeepAliveService : Service() {
         isGroup: Boolean
     ) {
         val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
-            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("call_action", "SHOW")
             putExtra("call_id", callId)
             putExtra("from_user", fromUser)

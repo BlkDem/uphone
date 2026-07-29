@@ -122,14 +122,14 @@ class WebRTCService {
 
       case 'call-reject':
         if (callId != null) {
-          _cleanup();
+          if (callId == _currentCallId) _cleanup();
           _callEventController.add(CallRejectedEvent(callId: callId));
         }
         break;
 
       case 'call-end':
         if (callId != null) {
-          _cleanup();
+          if (callId == _currentCallId) _cleanup();
           _callEventController.add(CallEndedEvent(callId: callId));
         }
         break;
@@ -243,6 +243,7 @@ class WebRTCService {
 
     _isAccepted = true;
     _isInCall = true;
+    _callEventController.add(CallAcceptedEvent(callId: callId));
 
     if (!isGroup) {
       await _createPeerConnection(fromUserId);

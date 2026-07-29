@@ -83,18 +83,6 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       callType: widget.callType,
       isGroup: widget.isGroup,
     );
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          callId: widget.callId,
-          remoteUserId: widget.remoteUserId,
-          remoteUserName: widget.remoteUserName,
-          callType: widget.callType,
-          isIncoming: true,
-          isGroup: widget.isGroup,
-        ),
-      ),
-    );
   }
 
   void _reject() {

@@ -159,9 +159,12 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (isCallIntent(intent)) {
+            val action = intent.getStringExtra("call_action")
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             showOverLockScreen()
-            dismissKeyguard()
+            if (action == "SHOW") {
+                dismissKeyguard()
+            }
         }
         handleIntent(intent)
     }

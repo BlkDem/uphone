@@ -33,6 +33,7 @@ class CallScreen extends ConsumerStatefulWidget {
 class _CallScreenState extends ConsumerState<CallScreen> {
   bool _isMuted = false;
   bool _isVideoOff = false;
+  bool _isSpeakerOn = false;
   String _callStatus = 'Connecting...';
   bool _callEnded = false;
   StreamSubscription<MediaStream>? _localSub;
@@ -47,7 +48,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void initState() {
     super.initState();
     _callStatus = widget.isIncoming ? 'Incoming call...' : 'Ringing...';
+    _isSpeakerOn = widget.callType == 'video';
+    if (_isSpeakerOn) Helper.setSpeakerphoneOn(true);
     _listenStreams();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initExistingLocalStream());
   }
 
   void _listenStreams() {
@@ -110,7 +114,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           setState(() {});
           break;
         case CallRejectedEvent():
-          if (_callEnded) break;
+          if (_callEnded || event.callId != widget.callId) break;
           _callEnded = true;
           setState(() => _callStatus = 'Call rejected');
           Future.delayed(const Duration(milliseconds: 500), () {
@@ -118,7 +122,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           });
           break;
         case CallEndedEvent():
-          if (_callEnded) break;
+          if (_callEnded || event.callId != widget.callId) break;
           _callEnded = true;
           setState(() => _callStatus = 'Call ended');
           Future.delayed(const Duration(milliseconds: 500), () {
@@ -129,6 +133,20 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           break;
       }
     });
+  }
+
+  void _initExistingLocalStream() async {
+    if (!mounted) return;
+    final stream = ref.read(webRTCServiceProvider).localStream;
+    if (stream == null || _localRendererReady) return;
+    try {
+      await _localRenderer.initialize();
+      if (!mounted) return;
+      _localRendererReady = true;
+      setState(() => _localRenderer.srcObject = stream);
+    } catch (e) {
+      debugPrint('Failed to init local renderer from existing stream: $e');
+    }
   }
 
   @override
@@ -159,6 +177,12 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void _toggleCamera() {
     ref.read(webRTCServiceProvider).toggleCamera();
     setState(() => _isVideoOff = !_isVideoOff);
+  }
+
+  void _toggleSpeaker() {
+    _isSpeakerOn = !_isSpeakerOn;
+    Helper.setSpeakerphoneOn(_isSpeakerOn);
+    setState(() {});
   }
 
   @override
@@ -386,6 +410,13 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           label: _isMuted ? 'Unmute' : 'Mute',
           onTap: _toggleMute,
           color: _isMuted ? colorScheme.error : colorScheme.onSurface,
+        ),
+        const SizedBox(width: 32),
+        _ControlButton(
+          icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_down,
+          label: _isSpeakerOn ? 'Speaker' : 'Earpiece',
+          onTap: _toggleSpeaker,
+          color: _isSpeakerOn ? colorScheme.primary : colorScheme.onSurface,
         ),
         if (widget.callType == 'video') ...[
           const SizedBox(width: 32),
