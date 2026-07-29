@@ -164,23 +164,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'or',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  buildGoogleSignInButton(),
                   const SizedBox(height: 16),
                 ],
               ),
