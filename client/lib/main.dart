@@ -26,8 +26,10 @@ void main() async {
     GoogleSignIn.instance.initialize();
   }
 
-  // Initialize Firebase (required for FCM on Android)
-  await Firebase.initializeApp();
+  // Initialize Firebase (required for FCM on Android, skip on Windows)
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await Firebase.initializeApp();
+  }
 
   // Initialize notifications
   await NotificationService.instance.initialize();
