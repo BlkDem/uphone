@@ -160,6 +160,7 @@ class WsClient {
   }
 
   void disconnectForBackground() {
+    _shouldReconnect = false;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
     _channel?.sink.close();

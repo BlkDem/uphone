@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/audio/call_ringer.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
+import 'package:uphone_client/features/calls/domain/webrtc_service.dart';
 import 'package:uphone_client/features/calls/presentation/call_screen.dart';
 
 class IncomingCallScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,7 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   Timer? _ringtoneTimer;
+  StreamSubscription<CallEvent>? _callEventSub;
 
   @override
   void initState() {
@@ -55,6 +57,18 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     );
 
     _startRingtone();
+    _listenForCallEnd();
+  }
+
+  void _listenForCallEnd() {
+    final webrtc = ref.read(webRTCServiceProvider);
+    _callEventSub = webrtc.callEvents.listen((event) {
+      if (!mounted) return;
+      if (event is CallEndedEvent || event is CallRejectedEvent) {
+        _stopRingtone();
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   void _startRingtone() {
@@ -70,6 +84,7 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     _stopRingtone();
     _pulseController.dispose();
     _ringtoneTimer?.cancel();
+    _callEventSub?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
