@@ -114,13 +114,18 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           setState(() {});
           break;
         case CallRejectedEvent():
-          if (_callEnded || event.callId != widget.callId) break;
+          if (_callEnded) break;
+          if (widget.callId != null && event.callId != widget.callId) break;
           _callEnded = true;
           setState(() => _callStatus = 'Call rejected');
           _popAfterDelay();
           break;
         case CallEndedEvent():
-          if (_callEnded || event.callId != widget.callId) break;
+          if (_callEnded) break;
+          if (widget.callId != null && event.callId != widget.callId) {
+            debugPrint('CallScreen: skipping CallEndedEvent (callEnded=$_callEnded, event=${event.callId}, widget=${widget.callId})');
+            break;
+          }
           _callEnded = true;
           setState(() => _callStatus = 'Call ended');
           _popAfterDelay();

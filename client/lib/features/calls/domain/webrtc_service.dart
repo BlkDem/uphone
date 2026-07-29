@@ -16,6 +16,7 @@ class WebRTCService {
   String? _chatId;
   bool _isGroupCall = false;
 
+
   bool get isInCall => _isInCall;
   String? get currentCallId => _currentCallId;
   MediaStream? get localStream => _localStream;
@@ -385,11 +386,34 @@ class WebRTCService {
       }
     };
 
+    void onRemoteDisconnected() {
+      final endedCallId = _currentCallId;
+      _handleParticipantLeft(remoteUserId);
+      if (!_isGroupCall && _peerConnections.isEmpty) {
+        Future.delayed(const Duration(seconds: 3), () {
+          if (_isInCall && !_isGroupCall && _peerConnections.isEmpty) {
+            _cleanup();
+            _callEventController.add(CallEndedEvent(callId: endedCallId ?? ''));
+          }
+        });
+      }
+    }
+
     pc.onConnectionState = (RTCPeerConnectionState state) {
       debugPrint('PeerConnection[$remoteUserId] state: $state');
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-        _handleParticipantLeft(remoteUserId);
+          state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+          state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+        onRemoteDisconnected();
+      }
+    };
+
+    pc.onIceConnectionState = (RTCIceConnectionState state) {
+      debugPrint('PeerConnection[$remoteUserId] ice state: $state');
+      if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+          state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+          state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+        onRemoteDisconnected();
       }
     };
 

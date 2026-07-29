@@ -15,7 +15,6 @@ class WsClient {
   bool _shouldReconnect = true;
   int _reconnectAttempts = 0;
   static const int _maxReconnectDelay = 60;
-  static const int _maxReconnectAttempts = 30;
   String? _wsUrl;
   final Map<String, WSMessageHandler> _messageHandlers = {};
   WSMessageHandler? _onConnect;
@@ -125,10 +124,6 @@ class WsClient {
 
   void _scheduleReconnect() {
     if (!_shouldReconnect) return;
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      _onDisconnect?.call({'reason': 'max_retries_exceeded'});
-      return;
-    }
     final delay = _getReconnectDelay();
     _reconnectTimer = Timer(Duration(seconds: delay), _doConnect);
   }

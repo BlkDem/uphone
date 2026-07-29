@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/audio/call_ringer.dart';
-import 'package:uphone_client/features/calls/domain/call_provider.dart';
-import 'package:uphone_client/features/calls/presentation/call_screen.dart';
+import 'package:uphone_client/core/providers.dart';
 
 class IncomingCallScreen extends ConsumerStatefulWidget {
   final String callId;
@@ -74,15 +73,34 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     super.dispose();
   }
 
-  void _accept() {
+  Future<void> _ensureWsConnected() async {
+    final apiClient = ref.read(apiClientProvider);
+    final wsClient = ref.read(wsClientProvider);
+    final token = apiClient.accessToken;
+    if (token == null || token.isEmpty) return;
+    if (wsClient.isConnected) return;
+    wsClient.reconnect();
+    for (int i = 0; i < 50; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (wsClient.isConnected) return;
+    }
+    debugPrint('_ensureWsConnected: timeout waiting for WS');
+  }
+
+  Future<void> _accept() async {
     _stopRingtone();
-    final webrtc = ref.read(webRTCServiceProvider);
-    webrtc.acceptCall(
-      widget.callId,
-      widget.remoteUserId,
-      callType: widget.callType,
-      isGroup: widget.isGroup,
-    );
+    await _ensureWsConnected();
+    try {
+      final webrtc = ref.read(webRTCServiceProvider);
+      await webrtc.acceptCall(
+        widget.callId,
+        widget.remoteUserId,
+        callType: widget.callType,
+        isGroup: widget.isGroup,
+      );
+    } catch (e) {
+      debugPrint('Failed to accept call: $e');
+    }
   }
 
   void _reject() {
