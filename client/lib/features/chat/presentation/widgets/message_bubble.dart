@@ -126,27 +126,10 @@ class MessageBubble extends ConsumerWidget {
               );
             },
           ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            if (!isMe)
-              Padding(
-                padding: const EdgeInsets.only(right: 2, top: 4),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: IconButton(
-                    icon: Icon(Icons.more_horiz, size: 16, color: colorScheme.onSurfaceVariant),
-                    onPressed: () => _showContextMenu(context),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    splashRadius: 12,
-                  ),
-                ),
-              ),
-            Flexible(
-              child: Container(
+        GestureDetector(
+          onTap: selectionMode ? null : () => _showContextMenu(context),
+          onLongPress: selectionMode ? null : () => onSelect?.call(),
+          child: Container(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * (isMediaOnly ? 0.85 : 0.7),
             ),
@@ -241,23 +224,6 @@ class MessageBubble extends ConsumerWidget {
               ],
             ),
           ),
-        ),
-          if (isMe)
-            Padding(
-              padding: const EdgeInsets.only(left: 2, top: 4),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: IconButton(
-                  icon: Icon(Icons.more_horiz, size: 16, color: colorScheme.onSurfaceVariant),
-                  onPressed: () => _showContextMenu(context),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  splashRadius: 12,
-                ),
-              ),
-            ),
-        ],
         ),
         if (message.reactions.isNotEmpty)
           Padding(
