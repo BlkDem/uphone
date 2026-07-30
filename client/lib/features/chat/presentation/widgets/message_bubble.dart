@@ -38,6 +38,8 @@ class MessageBubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final fontSize = ref.watch(chatFontSizeProvider);
+    final isMediaOnly = message.content.isEmpty &&
+        (message.type == 'image' || message.type == 'video');
 
     if (message.isDeleted) {
       return Padding(
@@ -112,7 +114,7 @@ class MessageBubble extends ConsumerWidget {
             onLongPress: () => _showContextMenu(context),
             child: Container(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.7,
+                maxWidth: MediaQuery.of(context).size.width * (isMediaOnly ? 0.85 : 0.7),
               ),
               margin: EdgeInsets.only(
                 left: isMe ? 36 : 4,
@@ -120,7 +122,10 @@ class MessageBubble extends ConsumerWidget {
                 top: 1,
                 bottom: 1,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: isMediaOnly ? 0 : 10,
+                vertical: 6,
+              ),
               decoration: BoxDecoration(
                 color: isMe
                     ? colorScheme.primaryContainer
@@ -136,56 +141,64 @@ class MessageBubble extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (message.content.isNotEmpty)
-                    Linkify(
-                      text: message.content,
-                      style: TextStyle(
-                        color: isMe
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurface,
-                        fontSize: fontSize,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Linkify(
+                        text: message.content,
+                        style: TextStyle(
+                          color: isMe
+                              ? colorScheme.onPrimaryContainer
+                              : colorScheme.onSurface,
+                          fontSize: fontSize,
+                        ),
+                        linkStyle: TextStyle(
+                          color: colorScheme.primary,
+                          fontSize: fontSize,
+                          decoration: TextDecoration.underline,
+                        ),
+                        onOpen: (link) async {
+                          final uri = Uri.parse(link.url);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
                       ),
-                      linkStyle: TextStyle(
-                        color: colorScheme.primary,
-                        fontSize: fontSize,
-                        decoration: TextDecoration.underline,
-                      ),
-                      onOpen: (link) async {
-                        final uri = Uri.parse(link.url);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      },
                     ),
                   if (message.fileUrl.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    _buildFilePreview(context),
+                    if (message.content.isNotEmpty) const SizedBox(height: 4),
+                    _buildFilePreview(context, isMediaOnly: isMediaOnly, isMe: isMe),
                   ],
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        DateFormat('HH:mm').format(message.createdAt),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isMe
-                                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                  : colorScheme.onSurfaceVariant,
-                              fontSize: 10,
-                            ),
-                      ),
-                      if (message.isPinned) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.push_pin,
-                          size: 10,
-                          color: colorScheme.onSurfaceVariant,
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: isMediaOnly ? 10 : 0,
+                      top: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          DateFormat('HH:mm').format(message.createdAt),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: isMe
+                                    ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                    : colorScheme.onSurfaceVariant,
+                                fontSize: 10,
+                              ),
                         ),
+                        if (message.isPinned) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.push_pin,
+                            size: 10,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ],
+                        if (isMe) ...[
+                          const SizedBox(width: 4),
+                          _buildStatusIcon(message.status, colorScheme),
+                        ],
                       ],
-                      if (isMe) ...[
-                        const SizedBox(width: 4),
-                        _buildStatusIcon(message.status, colorScheme),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -240,64 +253,69 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilePreview(BuildContext context) {
+  Widget _buildFilePreview(BuildContext context, {bool isMediaOnly = false, bool isMe = false}) {
+    final bubbleBorder = BorderRadius.only(
+      topLeft: const Radius.circular(12),
+      topRight: const Radius.circular(12),
+      bottomLeft: Radius.circular(isMe ? 12 : 2),
+      bottomRight: Radius.circular(isMe ? 2 : 12),
+    );
+
     if (message.type == 'image') {
+      Widget image = CachedNetworkImage(
+        imageUrl: message.fileUrl,
+        width: isMediaOnly ? double.infinity : 220,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          height: 160,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+        errorWidget: (context, url, error) => Container(
+          height: 120,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 2),
+              Text(
+                'Failed to load',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (isMediaOnly) {
+        image = ClipRRect(
+          borderRadius: bubbleBorder,
+          child: image,
+        );
+      } else {
+        image = ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: image,
+        );
+      }
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: onTapImage,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: message.fileUrl,
-                width: 220,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  width: 220,
-                  height: 160,
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  width: 220,
-                  height: 120,
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
-                  const SizedBox(height: 2),
-                      Text(
-                        'Failed to load',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          GestureDetector(onTap: onTapImage, child: image),
+          Padding(
+            padding: EdgeInsets.only(left: isMediaOnly ? 10 : 0, top: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _actionButton(context, icon: Icons.download, tooltip: 'Save', onPressed: () => _downloadFile(context)),
+                const SizedBox(width: 4),
+                _actionButton(context, icon: Icons.share, tooltip: 'Share', onPressed: () => _shareFile(context)),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _actionButton(
-                context,
-                icon: Icons.download,
-                tooltip: 'Save',
-                onPressed: () => _downloadFile(context),
-              ),
-              const SizedBox(width: 4),
-              _actionButton(
-                context,
-                icon: Icons.share,
-                tooltip: 'Share',
-                onPressed: () => _shareFile(context),
-              ),
-            ],
           ),
         ],
       );
@@ -307,28 +325,23 @@ class MessageBubble extends ConsumerWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: buildVideoPlayer(message.fileUrl),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _actionButton(
-                context,
-                icon: Icons.download,
-                tooltip: 'Save',
-                onPressed: () => _downloadFile(context),
-              ),
-              const SizedBox(width: 4),
-              _actionButton(
-                context,
-                icon: Icons.share,
-                tooltip: 'Share',
-                onPressed: () => _shareFile(context),
-              ),
-            ],
+          if (isMediaOnly)
+            ClipRRect(
+              borderRadius: bubbleBorder,
+              child: AspectRatio(aspectRatio: 16 / 9, child: buildVideoPlayer(message.fileUrl)),
+            )
+          else
+            AspectRatio(aspectRatio: 16 / 9, child: buildVideoPlayer(message.fileUrl)),
+          Padding(
+            padding: EdgeInsets.only(left: isMediaOnly ? 10 : 0, top: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _actionButton(context, icon: Icons.download, tooltip: 'Save', onPressed: () => _downloadFile(context)),
+                const SizedBox(width: 4),
+                _actionButton(context, icon: Icons.share, tooltip: 'Share', onPressed: () => _shareFile(context)),
+              ],
+            ),
           ),
         ],
       );
