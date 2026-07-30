@@ -1,5 +1,7 @@
 package webrtc
 
+import "strings"
+
 type ICEConfig struct {
 	IceServers []ICEServer `json:"iceServers"`
 }
@@ -18,6 +20,9 @@ func DefaultICEConfig() *ICEConfig {
 					"stun:stun.l.google.com:19302",
 					"stun:stun1.l.google.com:19302",
 					"stun:stun2.l.google.com:19302",
+					"stun:stun3.l.google.com:19302",
+					"stun:stun4.l.google.com:19302",
+					"stun:stun.cloudflare.com:3478",
 				},
 			},
 		},
@@ -28,11 +33,16 @@ func GetICEConfig(turnURL, turnUser, turnPass string) *ICEConfig {
 	cfg := DefaultICEConfig()
 
 	if turnURL != "" {
-		cfg.IceServers = append(cfg.IceServers, ICEServer{
-			URLs:       []string{turnURL},
-			Username:   turnUser,
-			Credential: turnPass,
-		})
+		for _, u := range strings.Split(turnURL, ",") {
+			u = strings.TrimSpace(u)
+			if u != "" {
+				cfg.IceServers = append(cfg.IceServers, ICEServer{
+					URLs:       []string{u},
+					Username:   turnUser,
+					Credential: turnPass,
+				})
+			}
+		}
 	}
 
 	return cfg

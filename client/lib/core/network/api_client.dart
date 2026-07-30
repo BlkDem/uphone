@@ -33,6 +33,9 @@ class ApiClient {
             handler.resolve(response);
             return;
           }
+          if (error.response?.statusCode == 401) {
+            await clearTokens();
+          }
         }
         handler.next(error);
       },
@@ -91,8 +94,10 @@ class ApiClient {
       _refreshToken = data['refresh_token'];
       _persistTokens();
       return true;
-    } catch (_) {
-      await clearTokens();
+    } catch (e) {
+      if (e is DioException && e.response?.statusCode == 401) {
+        await clearTokens();
+      }
       return false;
     }
   }

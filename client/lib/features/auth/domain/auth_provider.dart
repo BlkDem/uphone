@@ -234,8 +234,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         user: response.user,
       );
       return true;
-    } catch (_) {
-      await _apiClient.clearTokens();
+    } catch (e) {
+      if (e is DioException && e.response?.statusCode == 401) {
+        await _apiClient.clearTokens();
+      }
       state = const AuthState(status: AuthStatus.unauthenticated);
       return false;
     }

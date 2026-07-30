@@ -42,16 +42,54 @@ func TestDefaultICEConfig(t *testing.T) {
 		t.Error("expected at least one ICE server")
 	}
 
-	hasSTUN := false
+	hasGoogleSTUN := false
+	hasCloudflareSTUN := false
 	for _, server := range cfg.IceServers {
 		for _, url := range server.URLs {
-			if url == "stun:stun.l.google.com:19302" {
-				hasSTUN = true
+			switch url {
+			case "stun:stun.l.google.com:19302":
+				hasGoogleSTUN = true
+			case "stun:stun.cloudflare.com:3478":
+				hasCloudflareSTUN = true
 			}
 		}
 	}
-	if !hasSTUN {
+	if !hasGoogleSTUN {
 		t.Error("expected Google STUN server")
+	}
+	if !hasCloudflareSTUN {
+		t.Error("expected Cloudflare STUN server")
+	}
+}
+
+func TestGetICEConfigWithTURN(t *testing.T) {
+	cfg := GetICEConfig("turn:turn.example.com:3478", "user", "pass")
+
+	if len(cfg.IceServers) != 2 {
+		t.Errorf("expected 2 ICE servers (STUN + TURN), got %d", len(cfg.IceServers))
+	}
+
+	hasTURN := false
+	for _, s := range cfg.IceServers {
+		for _, u := range s.URLs {
+			if u == "turn:turn.example.com:3478" {
+				hasTURN = true
+				if s.Username != "user" || s.Credential != "pass" {
+					t.Error("TURN credentials not set correctly")
+				}
+			}
+		}
+	}
+	if !hasTURN {
+		t.Error("expected TURN server in config")
+	}
+}
+
+func TestGetICEConfigWithMultipleTURN(t *testing.T) {
+	cfg := GetICEConfig("turn:turn1.example.com:3478, turn:turn2.example.com:3478", "user", "pass")
+
+	if len(cfg.IceServers) != 3 {
+		t.Errorf("expected 3 ICE servers (STUN + 2 TURN), got %d", len(cfg.IceServers))
 	}
 }
 

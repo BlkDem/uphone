@@ -431,7 +431,6 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
   }
 
   void _showAddServer(BuildContext context) {
-    Navigator.pop(context);
     final nameCtrl = TextEditingController();
     final hostCtrl = TextEditingController();
     final portCtrl = TextEditingController(text: '8080');
@@ -466,6 +465,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                       ServerConfig.instance.add(server).then((_) {
                         widget.onSelected(server.id);
                         widget.onChanged?.call();
+                        Navigator.of(context).pop();
                       });
                     },
                     child: const Text('Save'),
@@ -488,7 +488,6 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
   }
 
   void _showEditServer(BuildContext context, ServerEntry server) {
-    Navigator.pop(context);
     final nameCtrl = TextEditingController(text: server.name);
     final hostCtrl = TextEditingController(text: server.host);
     final portCtrl = TextEditingController(text: server.port.toString());
@@ -520,7 +519,10 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                       if (name.isEmpty || host.isEmpty) return;
                       Navigator.pop(ctx);
                       final updated = server.copyWith(name: name, host: host, port: port, useTls: useTls);
-                      ServerConfig.instance.update(updated).then((_) => widget.onChanged?.call());
+                      ServerConfig.instance.update(updated).then((_) {
+                        widget.onChanged?.call();
+                        Navigator.of(context).pop();
+                      });
                     },
                     child: const Text('Save'),
                   ),
@@ -542,7 +544,6 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
   }
 
   void _confirmDelete(BuildContext context, ServerEntry server) {
-    Navigator.pop(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -561,6 +562,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
                     await ServerConfig.instance.remove(server.id);
                     widget.onSelected(ServerConfig.instance.selected.id);
                     widget.onChanged?.call();
+                    Navigator.of(context).pop();
                   },
                   child: const Text('Delete'),
                 ),

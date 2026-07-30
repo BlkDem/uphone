@@ -43,9 +43,13 @@ class WebRTCService {
           'stun:stun.l.google.com:19302',
           'stun:stun1.l.google.com:19302',
           'stun:stun2.l.google.com:19302',
+          'stun:stun3.l.google.com:19302',
+          'stun:stun4.l.google.com:19302',
+          'stun:stun.cloudflare.com:3478',
         ],
       },
     ],
+    'iceCandidatePoolSize': 10,
   };
 
   Map<String, dynamic> get iceConfig => _iceServers;
@@ -62,7 +66,7 @@ class WebRTCService {
     _wsClient.addHandler('webrtc', _handleSignal);
   }
 
-  void _handleSignal(Map<String, dynamic> message) {
+  Future<void> _handleSignal(Map<String, dynamic> message) async {
     final type = message['type'] as String?;
     final callId = message['call_id'] as String?;
     final fromUser = message['from_user'] as String?;
@@ -117,7 +121,11 @@ class WebRTCService {
         if (callId != null) {
           _isInCall = true;
           _callEventController.add(CallAcceptedEvent(callId: callId));
-          _createOfferForPeer(callId, message['from_user'] as String? ?? '');
+          try {
+            await _createOfferForPeer(callId, message['from_user'] as String? ?? '');
+          } catch (e) {
+            debugPrint('Failed to create offer after call-accept: $e');
+          }
         }
         break;
 
@@ -158,9 +166,7 @@ class WebRTCService {
           final candidate = payload['candidate'] as String?;
           final sdpMid = payload['sdpMid'] as String?;
           final sdpMLineIndex = payload['sdpMLineIndex'] as int?;
-          if (candidate != null && sdpMid != null && sdpMLineIndex != null) {
-            _handleIceCandidate(fromUser, candidate, sdpMid, sdpMLineIndex);
-          }
+          await _handleIceCandidate(fromUser, candidate, sdpMid, sdpMLineIndex);
         }
         break;
     }
@@ -246,18 +252,24 @@ class WebRTCService {
     _isInCall = true;
     _callEventController.add(CallAcceptedEvent(callId: callId));
 
-    if (!isGroup) {
-      await _createPeerConnection(fromUserId);
-      _wsClient.send({
-        'type': 'call-accept',
-        'call_id': callId,
-        'to_user': fromUserId,
-      });
-    } else {
-      _wsClient.send({
-        'type': 'call-join',
-        'call_id': callId,
-      });
+    try {
+      if (!isGroup) {
+        await _createPeerConnection(fromUserId);
+        _wsClient.send({
+          'type': 'call-accept',
+          'call_id': callId,
+          'to_user': fromUserId,
+        });
+      } else {
+        _wsClient.send({
+          'type': 'call-join',
+          'call_id': callId,
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to accept call: $e');
+      rejectCall(callId, fromUserId);
+      rethrow;
     }
   }
 
@@ -468,11 +480,11 @@ class WebRTCService {
   }
 
   Future<void> _handleIceCandidate(
-      String fromUserId, String candidate, String sdpMid, int sdpMLineIndex) async {
+      String fromUserId, String? candidate, String? sdpMid, int? sdpMLineIndex) async {
     final pc = _peerConnections[fromUserId];
     if (pc == null) return;
 
-    final iceCandidate = RTCIceCandidate(candidate, sdpMid, sdpMLineIndex);
+    final iceCandidate = RTCIceCandidate(candidate ?? '', sdpMid ?? '', sdpMLineIndex ?? 0);
     await pc.addCandidate(iceCandidate);
   }
 
