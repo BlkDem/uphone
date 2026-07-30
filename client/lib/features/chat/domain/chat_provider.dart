@@ -141,6 +141,7 @@ class ChatRepository {
     required String filename,
     required String mimeType,
     required Uint8List bytes,
+    String replyTo = '',
   }) async {
     final uploadResult = await uploadFile(filename, mimeType, bytes);
     final type = mimeType.startsWith('image/')
@@ -150,11 +151,13 @@ class ChatRepository {
             : mimeType.startsWith('audio/')
                 ? 'voice'
                 : 'file';
-    final response = await _dio.post('/api/v1/chats/$chatId/messages', data: {
+    final data = <String, dynamic>{
       'content': '',
       'type': type,
       'file_url': uploadResult['url'],
-    });
+    };
+    if (replyTo.isNotEmpty) data['reply_to'] = replyTo;
+    final response = await _dio.post('/api/v1/chats/$chatId/messages', data: data);
     return ChatMessage.fromJson(response.data);
   }
 }
@@ -171,6 +174,7 @@ class ChatState {
   final int currentOffset;
   final int savedUnreadCount;
   final Map<String, bool> typingUsers;
+  final Map<String, ChatMessage> messageCache;
 
   const ChatState({
     this.chats = const [],
@@ -184,6 +188,7 @@ class ChatState {
     this.currentOffset = 0,
     this.savedUnreadCount = 0,
     this.typingUsers = const {},
+    this.messageCache = const {},
   });
 
   ChatState copyWith({
@@ -198,6 +203,7 @@ class ChatState {
     int? currentOffset,
     int? savedUnreadCount,
     Map<String, bool>? typingUsers,
+    Map<String, ChatMessage>? messageCache,
   }) {
     return ChatState(
       chats: chats ?? this.chats,
@@ -211,7 +217,16 @@ class ChatState {
       currentOffset: currentOffset ?? this.currentOffset,
       savedUnreadCount: savedUnreadCount ?? this.savedUnreadCount,
       typingUsers: typingUsers ?? this.typingUsers,
+      messageCache: messageCache ?? this.messageCache,
     );
+  }
+
+  Map<String, ChatMessage> buildMessageCache() {
+    final cache = <String, ChatMessage>{};
+    for (final m in messages) {
+      cache[m.id] = m;
+    }
+    return cache;
   }
 }
 
@@ -295,7 +310,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
               }
               return m;
             }).toList();
-            state = state.copyWith(messages: updatedMessages);
+            state = state.copyWith(
+              messages: updatedMessages,
+              messageCache: {for (final m in updatedMessages) m.id: m},
+            );
 
             final updatedChats = state.chats.map((chat) {
               if (chat.id == chatId && chat.unreadCount > 0) {
@@ -323,7 +341,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _addMessage(ChatMessage msg) {
     if (msg.chatId == state.activeChatId) {
-      state = state.copyWith(messages: [...state.messages, msg]);
+      state = state.copyWith(
+        messages: [...state.messages, msg],
+        messageCache: {...state.messageCache, msg.id: msg},
+      );
     } else if (msg.senderId != currentUserId) {
       final updatedChats = state.chats.map((chat) {
         if (chat.id == msg.chatId) {
@@ -429,6 +450,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         totalMessages: page.totalCount,
         currentOffset: offset,
         hasMoreMessages: offset + 50 < page.totalCount,
+        messageCache: {...state.messageCache, for (final m in sorted) m.id: m},
       );
     } catch (e) {
       state = state.copyWith(isLoadingMessages: false);
@@ -449,12 +471,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final older = page.messages.toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
+      final combined = [...older, ...state.messages];
       state = state.copyWith(
-        messages: [...older, ...state.messages],
+        messages: combined,
         isLoadingOlder: false,
         currentOffset: newOffset,
         totalMessages: page.totalCount,
         hasMoreMessages: newOffset + 50 < page.totalCount,
+        messageCache: {...state.messageCache, for (final m in combined) m.id: m},
       );
     } catch (_) {
       state = state.copyWith(isLoadingOlder: false);
@@ -515,16 +539,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> sendMessage(String chatId, String content) async {
+  Future<void> sendMessage(String chatId, String content, {String replyTo = ''}) async {
     try {
-      final msg = await _repository.sendMessage(chatId, content: content);
+      final msg = await _repository.sendMessage(chatId, content: content, replyTo: replyTo);
       _onMessageSent(chatId, msg);
     } catch (_) {}
   }
 
-  Future<void> sendFile(String chatId, String filename, String mimeType, Uint8List bytes) async {
+  Future<void> sendFile(String chatId, String filename, String mimeType, Uint8List bytes, {String replyTo = ''}) async {
     try {
-      final msg = await _repository.sendMessageWithFile(chatId, filename: filename, mimeType: mimeType, bytes: bytes);
+      final msg = await _repository.sendMessageWithFile(chatId, filename: filename, mimeType: mimeType, bytes: bytes, replyTo: replyTo);
       _onMessageSent(chatId, msg);
     } catch (e) {
       debugPrint('sendFile error: $e');
@@ -564,27 +588,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> editMessage(String chatId, String msgId, String content) async {
     try {
       await _repository.editMessage(chatId, msgId, content);
+      final updated = state.messages.map((m) {
+        if (m.id == msgId) {
+          return ChatMessage(
+            id: m.id,
+            chatId: m.chatId,
+            senderId: m.senderId,
+            content: content,
+            type: m.type,
+            fileUrl: m.fileUrl,
+            replyTo: m.replyTo,
+            isPinned: m.isPinned,
+            isDeleted: m.isDeleted,
+            status: m.status,
+            createdAt: m.createdAt,
+            updatedAt: DateTime.now().toUtc(),
+            sender: m.sender,
+          );
+        }
+        return m;
+      }).toList();
       state = state.copyWith(
-        messages: state.messages.map((m) {
-          if (m.id == msgId) {
-            return ChatMessage(
-              id: m.id,
-              chatId: m.chatId,
-              senderId: m.senderId,
-              content: content,
-              type: m.type,
-              fileUrl: m.fileUrl,
-              replyTo: m.replyTo,
-              isPinned: m.isPinned,
-              isDeleted: m.isDeleted,
-              status: m.status,
-              createdAt: m.createdAt,
-              updatedAt: DateTime.now().toUtc(),
-              sender: m.sender,
-            );
-          }
-          return m;
-        }).toList(),
+        messages: updated,
+        messageCache: {for (final m in updated) m.id: m},
       );
     } catch (_) {}
   }
@@ -592,8 +618,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> deleteMessage(String chatId, String msgId, {String mode = 'me'}) async {
     try {
       await _repository.deleteMessage(chatId, msgId, mode: mode);
+      final remaining = state.messages.where((m) => m.id != msgId).toList();
+      final newCache = Map<String, ChatMessage>.from(state.messageCache);
+      newCache.remove(msgId);
       state = state.copyWith(
-        messages: state.messages.where((m) => m.id != msgId).toList(),
+        messages: remaining,
+        messageCache: newCache,
       );
     } catch (_) {}
   }
@@ -608,37 +638,39 @@ class ChatNotifier extends StateNotifier<ChatState> {
       } else {
         await _repository.addReaction(chatId, msgId, emoji);
       }
+      final updated = state.messages.map((m) {
+        if (m.id != msgId) return m;
+        final newMyReactions = List<String>.from(m.myReactions);
+        final newReactions = Map<String, int>.from(m.reactions);
+        if (hasReaction) {
+          newMyReactions.remove(emoji);
+          newReactions[emoji] = (newReactions[emoji] ?? 1) - 1;
+          if (newReactions[emoji]! <= 0) newReactions.remove(emoji);
+        } else {
+          newMyReactions.add(emoji);
+          newReactions[emoji] = (newReactions[emoji] ?? 0) + 1;
+        }
+        return ChatMessage(
+          id: m.id,
+          chatId: m.chatId,
+          senderId: m.senderId,
+          content: m.content,
+          type: m.type,
+          fileUrl: m.fileUrl,
+          replyTo: m.replyTo,
+          isPinned: m.isPinned,
+          isDeleted: m.isDeleted,
+          status: m.status,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+          sender: m.sender,
+          reactions: newReactions,
+          myReactions: newMyReactions,
+        );
+      }).toList();
       state = state.copyWith(
-        messages: state.messages.map((m) {
-          if (m.id != msgId) return m;
-          final newMyReactions = List<String>.from(m.myReactions);
-          final newReactions = Map<String, int>.from(m.reactions);
-          if (hasReaction) {
-            newMyReactions.remove(emoji);
-            newReactions[emoji] = (newReactions[emoji] ?? 1) - 1;
-            if (newReactions[emoji]! <= 0) newReactions.remove(emoji);
-          } else {
-            newMyReactions.add(emoji);
-            newReactions[emoji] = (newReactions[emoji] ?? 0) + 1;
-          }
-          return ChatMessage(
-            id: m.id,
-            chatId: m.chatId,
-            senderId: m.senderId,
-            content: m.content,
-            type: m.type,
-            fileUrl: m.fileUrl,
-            replyTo: m.replyTo,
-            isPinned: m.isPinned,
-            isDeleted: m.isDeleted,
-            status: m.status,
-            createdAt: m.createdAt,
-            updatedAt: m.updatedAt,
-            sender: m.sender,
-            reactions: newReactions,
-            myReactions: newMyReactions,
-          );
-        }).toList(),
+        messages: updated,
+        messageCache: {for (final m in updated) m.id: m},
       );
     } catch (_) {}
   }

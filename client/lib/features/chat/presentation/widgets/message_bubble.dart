@@ -15,11 +15,16 @@ class MessageBubble extends ConsumerWidget {
   final bool isMe;
   final bool showSender;
   final Map<String, String> contactAvatars;
+  final bool isSelected;
+  final bool selectionMode;
+  final VoidCallback? onTap;
+  final VoidCallback? onSelect;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final Function(String)? onReact;
   final VoidCallback? onForward;
   final VoidCallback? onTapImage;
+  final ChatMessage? quotedMessage;
 
   const MessageBubble({
     super.key,
@@ -27,14 +32,18 @@ class MessageBubble extends ConsumerWidget {
     required this.isMe,
     this.showSender = false,
     this.contactAvatars = const {},
+    this.isSelected = false,
+    this.selectionMode = false,
+    this.onTap,
+    this.onSelect,
     this.onEdit,
     this.onDelete,
     this.onReact,
     this.onForward,
     this.onTapImage,
+    this.quotedMessage,
   });
 
-  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final fontSize = ref.watch(chatFontSizeProvider);
@@ -61,193 +70,323 @@ class MessageBubble extends ConsumerWidget {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          if (showSender)
-            Builder(
-              builder: (context) {
-                final senderName = message.sender?.displayName ?? 'Unknown';
-                final senderAvatarUrl = message.sender?.avatarUrl ?? '';
-                final contactAvatar = contactAvatars[senderName] ?? '';
-                final avatarUrl = senderAvatarUrl.isNotEmpty
-                    ? senderAvatarUrl
-                    : contactAvatar;
-                return Padding(
-                  padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
+    return _buildNormalMessage(context, ref);
+  }
+
+  Widget _buildNormalMessage(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final fontSize = ref.watch(chatFontSizeProvider);
+    final isMediaOnly = message.content.isEmpty &&
+        (message.type == 'image' || message.type == 'video');
+
+    final bubbleContent = Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (showSender)
+          Builder(
+            builder: (context) {
+              final senderName = message.sender?.displayName ?? 'Unknown';
+              final senderAvatarUrl = message.sender?.avatarUrl ?? '';
+              final contactAvatar = contactAvatars[senderName] ?? '';
+              final avatarUrl = senderAvatarUrl.isNotEmpty
+                  ? senderAvatarUrl
+                  : contactAvatar;
+              return Padding(
+                padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 8,
+                      backgroundColor: colorScheme.primaryContainer,
+                      backgroundImage: avatarUrl.isNotEmpty
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      child: avatarUrl.isEmpty
+                          ? Text(
+                              senderName[0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      senderName,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
+                          ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (!isMe)
+              Padding(
+                padding: const EdgeInsets.only(right: 2, top: 4),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: IconButton(
+                    icon: Icon(Icons.more_horiz, size: 16, color: colorScheme.onSurfaceVariant),
+                    onPressed: () => _showContextMenu(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 12,
+                  ),
+                ),
+              ),
+            Flexible(
+              child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * (isMediaOnly ? 0.85 : 0.7),
+            ),
+            margin: EdgeInsets.only(
+              left: isMe ? 36 : 4,
+              right: isMe ? 4 : 36,
+              top: 1,
+              bottom: 1,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMediaOnly ? 0 : 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colorScheme.primary.withValues(alpha: 0.15)
+                  : isMe
+                      ? colorScheme.primaryContainer
+                      : colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isMe ? 12 : 2),
+                bottomRight: Radius.circular(isMe ? 2 : 12),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (quotedMessage != null)
+                  _buildQuotePreview(context, isMe: isMe),
+                if (message.content.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Linkify(
+                      text: message.content,
+                      style: TextStyle(
+                        color: isMe
+                            ? colorScheme.onPrimaryContainer
+                            : colorScheme.onSurface,
+                        fontSize: fontSize,
+                      ),
+                      linkStyle: TextStyle(
+                        color: colorScheme.primary,
+                        fontSize: fontSize,
+                        decoration: TextDecoration.underline,
+                      ),
+                      onOpen: (link) async {
+                        final uri = Uri.parse(link.url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                    ),
+                  ),
+                if (message.fileUrl.isNotEmpty) ...[
+                  if (message.content.isNotEmpty) const SizedBox(height: 4),
+                  _buildFilePreview(context, isMediaOnly: isMediaOnly, isMe: isMe),
+                ],
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: isMediaOnly ? 10 : 0,
+                    top: 4,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircleAvatar(
-                        radius: 8,
-                        backgroundColor: colorScheme.primaryContainer,
-                        backgroundImage: avatarUrl.isNotEmpty
-                            ? NetworkImage(avatarUrl)
-                            : null,
-                        child: avatarUrl.isEmpty
-                            ? Text(
-                                senderName[0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  color: colorScheme.onPrimaryContainer,
-                                ),
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 4),
                       Text(
-                        senderName,
+                        DateFormat('HH:mm').format(message.createdAt),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
+                              color: isMe
+                                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                                  : colorScheme.onSurfaceVariant,
+                              fontSize: 10,
                             ),
                       ),
+                      if (message.isPinned) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.push_pin,
+                          size: 10,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        _buildStatusIcon(message.status, colorScheme),
+                      ],
                     ],
                   ),
-                );
-              },
+                ),
+              ],
             ),
-          GestureDetector(
-            onLongPress: () => _showContextMenu(context),
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * (isMediaOnly ? 0.85 : 0.7),
-              ),
-              margin: EdgeInsets.only(
-                left: isMe ? 36 : 4,
-                right: isMe ? 4 : 36,
-                top: 1,
-                bottom: 1,
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: isMediaOnly ? 0 : 10,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? colorScheme.primaryContainer
-                    : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(12),
-                  topRight: const Radius.circular(12),
-                  bottomLeft: Radius.circular(isMe ? 12 : 2),
-                  bottomRight: Radius.circular(isMe ? 2 : 12),
+          ),
+        ),
+          if (isMe)
+            Padding(
+              padding: const EdgeInsets.only(left: 2, top: 4),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: IconButton(
+                  icon: Icon(Icons.more_horiz, size: 16, color: colorScheme.onSurfaceVariant),
+                  onPressed: () => _showContextMenu(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 12,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (message.content.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Linkify(
-                        text: message.content,
-                        style: TextStyle(
-                          color: isMe
-                              ? colorScheme.onPrimaryContainer
-                              : colorScheme.onSurface,
-                          fontSize: fontSize,
-                        ),
-                        linkStyle: TextStyle(
-                          color: colorScheme.primary,
-                          fontSize: fontSize,
-                          decoration: TextDecoration.underline,
-                        ),
-                        onOpen: (link) async {
-                          final uri = Uri.parse(link.url);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          }
-                        },
-                      ),
-                    ),
-                  if (message.fileUrl.isNotEmpty) ...[
-                    if (message.content.isNotEmpty) const SizedBox(height: 4),
-                    _buildFilePreview(context, isMediaOnly: isMediaOnly, isMe: isMe),
-                  ],
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: isMediaOnly ? 10 : 0,
-                      top: 4,
+            ),
+        ],
+        ),
+        if (message.reactions.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(
+              left: isMe ? 36 : 8,
+              right: isMe ? 8 : 36,
+              top: 2,
+            ),
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: message.reactions.entries.map((e) {
+                final isMy = message.myReactions.contains(e.key);
+                return GestureDetector(
+                  onTap: () => onReact?.call(e.key),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isMy
+                          ? colorScheme.primaryContainer
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isMy
+                          ? Border.all(color: colorScheme.primary, width: 1)
+                          : null,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Text(e.key, style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 2),
                         Text(
-                          DateFormat('HH:mm').format(message.createdAt),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: isMe
-                                    ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                    : colorScheme.onSurfaceVariant,
-                                fontSize: 10,
-                              ),
-                        ),
-                        if (message.isPinned) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.push_pin,
-                            size: 10,
-                            color: colorScheme.onSurfaceVariant,
+                          '${e.value}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isMy ? colorScheme.primary : colorScheme.onSurfaceVariant,
                           ),
-                        ],
-                        if (isMe) ...[
-                          const SizedBox(width: 4),
-                          _buildStatusIcon(message.status, colorScheme),
-                        ],
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
           ),
-          if (message.reactions.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: isMe ? 36 : 8,
-                right: isMe ? 8 : 36,
-                top: 2,
-              ),
-              child: Wrap(
-                spacing: 4,
-                runSpacing: 2,
-                children: message.reactions.entries.map((e) {
-                  final isMy = message.myReactions.contains(e.key);
-                  return GestureDetector(
-                    onTap: () => onReact?.call(e.key),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isMy
-                            ? colorScheme.primaryContainer
-                            : colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                        border: isMy
-                            ? Border.all(color: colorScheme.primary, width: 1)
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(e.key, style: const TextStyle(fontSize: 14)),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${e.value}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isMy ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: selectionMode
+          ? GestureDetector(
+              onTap: onTap,
+              child: Row(
+                children: [
+                  if (!isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Icon(
+                        isSelected ? Icons.check_circle : Icons.radio_button_off,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        size: 22,
                       ),
                     ),
-                  );
-                }).toList(),
+                  Expanded(child: bubbleContent),
+                  if (isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(
+                        isSelected ? Icons.check_circle : Icons.radio_button_off,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        size: 22,
+                      ),
+                    ),
+                ],
               ),
+            )
+          : bubbleContent,
+    );
+  }
+
+  Widget _buildQuotePreview(BuildContext context, {required bool isMe}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final qm = quotedMessage!;
+    final senderName = qm.sender?.displayName ?? qm.sender?.username ?? 'Unknown';
+    final previewText = qm.content.isNotEmpty ? qm.content : '[${qm.type}]';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4, right: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: isMe
+                ? colorScheme.onPrimaryContainer.withValues(alpha: 0.5)
+                : colorScheme.primary.withValues(alpha: 0.5),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            senderName,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isMe
+                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.8)
+                  : colorScheme.primary,
             ),
+          ),
+          Text(
+            previewText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMe
+                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.6)
+                  : colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -518,8 +657,8 @@ class MessageBubble extends ConsumerWidget {
   }
 
   void _showContextMenu(BuildContext context) {
-    final hasActions = onEdit != null || onDelete != null || onForward != null || onReact != null;
-    if (!hasActions) return;
+    // Always show - Select option is always present
+  
 
     final quickEmojis = [
       '👍', '👎', '❤️', '🔥', '😂', '😮',
@@ -530,70 +669,80 @@ class MessageBubble extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (onReact != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: quickEmojis.map((emoji) {
-                    final isMy = message.myReactions.contains(emoji);
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        onReact?.call(emoji);
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isMy
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context).colorScheme.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                          border: isMy
-                              ? Border.all(color: Theme.of(context).colorScheme.primary)
-                              : null,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (onReact != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: quickEmojis.map((emoji) {
+                      final isMy = message.myReactions.contains(emoji);
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          onReact?.call(emoji);
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isMy
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            shape: BoxShape.circle,
+                            border: isMy
+                                ? Border.all(color: Theme.of(context).colorScheme.primary)
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                          ),
                         ),
-                        child: Center(
-                          child: Text(emoji, style: const TextStyle(fontSize: 20)),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.check_box_outlined),
+                title: const Text('Select'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onSelect?.call();
+                },
+              ),
+              if (onForward != null)
+                ListTile(
+                  leading: const Icon(Icons.forward),
+                  title: const Text('Forward'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onForward?.call();
+                  },
                 ),
-              ),
-            if (onForward != null)
-              ListTile(
-                leading: const Icon(Icons.forward),
-                title: const Text('Forward'),
-                onTap: () {
-                  Navigator.pop(context);
-                  onForward?.call();
-                },
-              ),
-            if (onEdit != null)
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () {
-                  Navigator.pop(context);
-                  onEdit?.call();
-                },
-              ),
-            if (onDelete != null)
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text('Delete', style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  onDelete?.call();
-                },
-              ),
-          ],
+              if (onEdit != null)
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Edit'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onEdit?.call();
+                  },
+                ),
+              if (onDelete != null)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onDelete?.call();
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );

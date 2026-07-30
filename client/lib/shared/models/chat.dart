@@ -58,6 +58,11 @@ class ChatMessage {
   final Map<String, int> reactions;
   final List<String> myReactions;
 
+  List<String> get replyToIds {
+    if (replyTo.isEmpty) return [];
+    return replyTo.split(',').where((id) => id.isNotEmpty).toList();
+  }
+
   const ChatMessage({
     required this.id,
     required this.chatId,

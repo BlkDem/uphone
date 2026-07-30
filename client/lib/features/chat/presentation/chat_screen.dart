@@ -35,6 +35,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _initialScrollDone = false;
   int _scrollRetries = 0;
 
+  final Set<String> _selectedIds = {};
+  List<ChatMessage> _quotedMessages = [];
+
+  String get _replyToParam {
+    if (_quotedMessages.isEmpty) return '';
+    return _quotedMessages.map((m) => m.id).join(',');
+  }
+
+  bool get _isSelectionMode => _selectedIds.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -283,86 +293,111 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chatName = currentChat?.name ?? 'Chat';
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            ref.read(chatProvider.notifier).closeChat();
-            context.go('/chats');
-          },
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: displayAvatar != null && displayAvatar.isNotEmpty
-                  ? NetworkImage(displayAvatar)
-                  : null,
-              child: (displayAvatar == null || displayAvatar.isEmpty)
-                  ? Text(
-                      chatName.isNotEmpty
-                          ? chatName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: _isSelectionMode
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(_selectedIds.clear),
+              ),
+              title: Text('${_selectedIds.length} selected'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.reply_outlined),
+                  tooltip: 'Quote',
+                  onPressed: _selectedIds.isNotEmpty ? () => _quoteMessages(_selectedIds.toList()) : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.forward_outlined),
+                  tooltip: 'Forward',
+                  onPressed: _selectedIds.isNotEmpty ? _forwardSelected : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete',
+                  onPressed: _deleteSelected,
+                ),
+              ],
+            )
+          : AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  ref.read(chatProvider.notifier).closeChat();
+                  context.go('/chats');
+                },
+              ),
+              title: Row(
                 children: [
-                  Text(
-                    chatName,
-                    style: const TextStyle(fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    backgroundImage: displayAvatar != null && displayAvatar.isNotEmpty
+                        ? NetworkImage(displayAvatar)
+                        : null,
+                    child: (displayAvatar == null || displayAvatar.isEmpty)
+                        ? Text(
+                            chatName.isNotEmpty
+                                ? chatName[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                          )
+                        : null,
                   ),
-                  if (chatState.typingUsers.isNotEmpty)
-                    Text(
-                      'typing...',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          chatName,
+                          style: const TextStyle(fontSize: 16),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (chatState.typingUsers.isNotEmpty)
+                          Text(
+                            'typing...',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                           ),
+                      ],
                     ),
+                  ),
                 ],
               ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  onPressed: () => context.push('/chats/${widget.chatId}/gallery'),
+                ),
+                if (currentChat == null || currentChat.type == 'personal')
+                  IconButton(
+                    icon: const Icon(Icons.videocam_outlined),
+                    onPressed: () => _startCall('video'),
+                  ),
+                if (currentChat == null || currentChat.type == 'personal')
+                  IconButton(
+                    icon: const Icon(Icons.call_outlined),
+                    onPressed: () => _startCall('audio'),
+                  ),
+                if (currentChat != null && currentChat.type != 'personal')
+                  IconButton(
+                    icon: const Icon(Icons.videocam_outlined),
+                    onPressed: () => _startGroupCall('video'),
+                  ),
+                if (currentChat != null && currentChat.type != 'personal')
+                  IconButton(
+                    icon: const Icon(Icons.call_outlined),
+                    onPressed: () => _startGroupCall('audio'),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () => context.push('/chats/${widget.chatId}/info'),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.photo_library_outlined),
-            onPressed: () => context.push('/chats/${widget.chatId}/gallery'),
-          ),
-          if (currentChat == null || currentChat.type == 'personal')
-            IconButton(
-              icon: const Icon(Icons.videocam_outlined),
-              onPressed: () => _startCall('video'),
-            ),
-          if (currentChat == null || currentChat.type == 'personal')
-            IconButton(
-              icon: const Icon(Icons.call_outlined),
-              onPressed: () => _startCall('audio'),
-            ),
-          if (currentChat != null && currentChat.type != 'personal')
-            IconButton(
-              icon: const Icon(Icons.videocam_outlined),
-              onPressed: () => _startGroupCall('video'),
-            ),
-          if (currentChat != null && currentChat.type != 'personal')
-            IconButton(
-              icon: const Icon(Icons.call_outlined),
-              onPressed: () => _startGroupCall('audio'),
-            ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => context.push('/chats/${widget.chatId}/info'),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           Column(
@@ -386,6 +421,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         .firstOrNull
                     : null,
                 onCancelEdit: () => setState(() => _editingMessageId = null),
+                quotedMessages: _quotedMessages,
+                onCancelQuote: () => setState(() => _quotedMessages = []),
               ),
             ],
           ),
@@ -465,22 +502,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         final showSender = !isMe &&
             (index == 0 ||
                 chatState.messages[index - 1].senderId != msg.senderId);
+        final quotedMessage = _resolveQuoted(msg, chatState);
 
-        return MessageBubble(
-          message: msg,
-          isMe: isMe,
-          showSender: showSender,
-          contactAvatars: contactAvatars,
-          onEdit: isMe ? () => _startEdit(msg.id) : null,
-          onDelete: () => _deleteMessage(msg.id),
-          onReact: (emoji) => _addReaction(msg.id, emoji),
-          onForward: () => _forwardMessage(msg.id),
-          onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
-              ? () => _openImage(msg)
-              : null,
+        return GestureDetector(
+          child: MessageBubble(
+            message: msg,
+            isMe: isMe,
+            showSender: showSender,
+            contactAvatars: contactAvatars,
+            isSelected: _selectedIds.contains(msg.id),
+            selectionMode: _isSelectionMode,
+            onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
+            onSelect: () {
+              _onMessageLongPress(msg.id);
+            },
+            onEdit: isMe ? () => _startEdit(msg.id) : null,
+            onDelete: () => _deleteMessage(msg.id),
+            onReact: (emoji) => _addReaction(msg.id, emoji),
+            onForward: () => _forwardMessage(msg.id),
+            onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
+                ? () => _openImage(msg)
+                : null,
+            quotedMessage: quotedMessage,
+          ),
         );
       },
     );
+  }
+
+  ChatMessage? _resolveQuoted(ChatMessage msg, ChatState state) {
+    if (msg.replyTo.isEmpty) return null;
+    final ids = msg.replyToIds;
+    if (ids.isEmpty) return null;
+    return state.messageCache[ids.first];
   }
 
   Widget _buildNativeList(ChatState chatState, AuthState authState, ContactsState contactsState) {
@@ -515,19 +569,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         final showSender = !isMe &&
             (index == 0 ||
                 chatState.messages[index - 1].senderId != msg.senderId);
+        final quotedMessage = _resolveQuoted(msg, chatState);
 
-        return MessageBubble(
-          message: msg,
-          isMe: isMe,
-          showSender: showSender,
-          contactAvatars: contactAvatars,
-          onEdit: isMe ? () => _startEdit(msg.id) : null,
-          onDelete: () => _deleteMessage(msg.id),
-          onReact: (emoji) => _addReaction(msg.id, emoji),
-          onForward: () => _forwardMessage(msg.id),
-          onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
-              ? () => _openImage(msg)
-              : null,
+        return GestureDetector(
+          child: MessageBubble(
+            message: msg,
+            isMe: isMe,
+            showSender: showSender,
+            contactAvatars: contactAvatars,
+            isSelected: _selectedIds.contains(msg.id),
+            selectionMode: _isSelectionMode,
+            onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
+            onSelect: () {
+              _onMessageLongPress(msg.id);
+            },
+            onEdit: isMe ? () => _startEdit(msg.id) : null,
+            onDelete: () => _deleteMessage(msg.id),
+            onReact: (emoji) => _addReaction(msg.id, emoji),
+            onForward: () => _forwardMessage(msg.id),
+            onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
+                ? () => _openImage(msg)
+                : null,
+            quotedMessage: quotedMessage,
+          ),
         );
       },
     );
@@ -542,14 +606,94 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           );
       setState(() => _editingMessageId = null);
     } else {
-      ref.read(chatProvider.notifier).sendMessage(widget.chatId, content);
+      final replyTo = _replyToParam;
+      ref.read(chatProvider.notifier).sendMessage(widget.chatId, content, replyTo: replyTo);
+      if (replyTo.isNotEmpty) {
+        setState(() => _quotedMessages = []);
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   void _sendFile(String filename, String mimeType, Uint8List bytes) {
-    ref.read(chatProvider.notifier).sendFile(widget.chatId, filename, mimeType, bytes);
+    final replyTo = _replyToParam;
+    ref.read(chatProvider.notifier).sendFile(widget.chatId, filename, mimeType, bytes, replyTo: replyTo);
+    if (replyTo.isNotEmpty) {
+      setState(() => _quotedMessages = []);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _toggleSelection(String msgId) {
+    setState(() {
+      if (_selectedIds.contains(msgId)) {
+        _selectedIds.remove(msgId);
+      } else {
+        _selectedIds.add(msgId);
+      }
+    });
+  }
+
+  void _onMessageLongPress(String msgId) {
+    if (!_isSelectionMode) {
+      setState(() {
+        _selectedIds.add(msgId);
+      });
+    }
+  }
+
+  void _quoteMessages(List<String> msgIds) {
+    final chatState = ref.read(chatProvider);
+    final msgs = msgIds.map((id) => chatState.messages.where((m) => m.id == id).firstOrNull)
+        .whereType<ChatMessage>().toList();
+    if (msgs.isNotEmpty) {
+      setState(() {
+        _quotedMessages = msgs;
+        _selectedIds.clear();
+      });
+    }
+  }
+
+  void _deleteSelected() {
+    if (_selectedIds.isEmpty) return;
+    final count = _selectedIds.length;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete messages'),
+        content: Text('Delete $count message${count > 1 ? 's' : ''}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              for (final id in _selectedIds.toList()) {
+                ref.read(chatProvider.notifier).deleteMessage(widget.chatId, id);
+              }
+              setState(_selectedIds.clear);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _forwardSelected() {
+    if (_selectedIds.isEmpty) return;
+    final ids = _selectedIds.toList();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForwardMessageSheet(
+          sourceChatId: widget.chatId,
+          messageIds: ids,
+        ),
+      ),
+    );
+    setState(_selectedIds.clear);
   }
 
   void _startEdit(String msgId) {
@@ -633,7 +777,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       isScrollControlled: true,
       builder: (_) => ForwardMessageSheet(
         sourceChatId: widget.chatId,
-        messageId: msgId,
+        messageIds: [msgId],
       ),
     );
   }

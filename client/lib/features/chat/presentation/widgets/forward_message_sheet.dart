@@ -5,12 +5,12 @@ import 'package:uphone_client/shared/models/chat.dart';
 
 class ForwardMessageSheet extends ConsumerStatefulWidget {
   final String sourceChatId;
-  final String messageId;
+  final List<String> messageIds;
 
   const ForwardMessageSheet({
     super.key,
     required this.sourceChatId,
-    required this.messageId,
+    required this.messageIds,
   });
 
   @override
@@ -45,11 +45,14 @@ class _ForwardMessageSheetState extends ConsumerState<ForwardMessageSheet> {
 
     try {
       final repo = ref.read(chatRepositoryProvider);
-      await repo.forwardMessage(widget.sourceChatId, widget.messageId, target.id);
+      for (final msgId in widget.messageIds) {
+        await repo.forwardMessage(widget.sourceChatId, msgId, target.id);
+      }
       if (mounted) {
         Navigator.of(context).pop();
+        final count = widget.messageIds.length;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Forwarded to ${target.name.isNotEmpty ? target.name : 'chat'}')),
+          SnackBar(content: Text('Forwarded $count message${count > 1 ? 's' : ''} to ${target.name.isNotEmpty ? target.name : 'chat'}')),
         );
       }
     } catch (e) {

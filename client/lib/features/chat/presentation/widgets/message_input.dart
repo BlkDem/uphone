@@ -12,6 +12,8 @@ class MessageInput extends StatefulWidget {
   final VoidCallback? onTypingStop;
   final ChatMessage? editingMessage;
   final VoidCallback? onCancelEdit;
+  final List<ChatMessage> quotedMessages;
+  final VoidCallback? onCancelQuote;
 
   const MessageInput({
     super.key,
@@ -21,6 +23,8 @@ class MessageInput extends StatefulWidget {
     this.onTypingStop,
     this.editingMessage,
     this.onCancelEdit,
+    this.quotedMessages = const [],
+    this.onCancelQuote,
   });
 
   @override
@@ -268,6 +272,57 @@ class _MessageInputState extends State<MessageInput> {
               ],
             ),
           ),
+        if (widget.quotedMessages.isNotEmpty)
+          ...widget.quotedMessages.map((qm) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.secondaryContainer.withValues(alpha: 0.4),
+              border: Border(
+                left: BorderSide(color: colorScheme.secondary, width: 3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.reply, size: 14, color: colorScheme.secondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (qm.sender != null)
+                        Text(
+                          qm.sender!.displayName.isNotEmpty
+                              ? qm.sender!.displayName
+                              : qm.sender!.username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colorScheme.secondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      Text(
+                        qm.content.isNotEmpty ? qm.content : '[${qm.type}]',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colorScheme.onSecondaryContainer,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: widget.onCancelQuote,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          )),
         if (_isUploading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
