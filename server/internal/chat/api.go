@@ -664,6 +664,7 @@ func (h *APIHandler) ForwardMessage(w http.ResponseWriter, r *http.Request) {
 		Content:  msg.Content,
 		Type:     msg.Type,
 		FileURL:  msg.FileURL,
+		ReplyTo:  msg.ReplyTo,
 	}
 
 	if err := h.repo.ForwardMessage(r.Context(), req.ChatID, newMsg); err != nil {
