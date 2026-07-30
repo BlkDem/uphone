@@ -186,6 +186,7 @@ class MainActivity : FlutterActivity() {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             nm.cancel(CallOverlayService.NOTIFICATION_ID)
         } catch (_: Exception) {}
+        CallOverlayService.stop(this)
         val data = mapOf(
             "call_action" to callAction,
             "call_id" to (intent.getStringExtra("call_id") ?: ""),
