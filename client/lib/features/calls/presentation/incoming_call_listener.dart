@@ -93,6 +93,7 @@ class _IncomingCallListenerState
           _closeIncomingCallScreen();
         }
         NotificationService.cancelCallNotification(callId: event.callId);
+        NotificationService.resetCallScreenFlags();
         _clearPending();
       }
     });
@@ -110,6 +111,7 @@ class _IncomingCallListenerState
       } else if (action.action == 'END') {
         _closeIncomingCallScreen();
         NotificationService.cancelCallNotification(callId: action.callId);
+        NotificationService.resetCallScreenFlags();
         _clearPending();
         if (ref.read(webRTCServiceProvider).currentCallId != null) {
           final navKey = ref.read(navigatorKeyProvider);
@@ -174,6 +176,7 @@ class _IncomingCallListenerState
   void _rejectFromNotification(NotificationAction action) {
     _closeIncomingCallScreen();
     NotificationService.cancelCallNotification(callId: action.callId);
+    NotificationService.resetCallScreenFlags();
     final webrtc = ref.read(webRTCServiceProvider);
     webrtc.rejectCall(action.callId, action.fromUserId);
   }

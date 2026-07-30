@@ -261,6 +261,12 @@ class NotificationService {
     } catch (_) {}
   }
 
+  static Future<void> resetCallScreenFlags() async {
+    try {
+      await _callChannel.invokeMethod('resetCallScreenFlags');
+    } catch (_) {}
+  }
+
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;

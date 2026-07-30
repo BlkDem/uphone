@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:uphone_client/core/notifications/notification_service.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
 import 'package:uphone_client/features/calls/domain/webrtc_service.dart';
 
@@ -178,6 +179,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     if (_callEnded) return;
     _callEnded = true;
     ref.read(webRTCServiceProvider).endCall();
+    NotificationService.resetCallScreenFlags();
     if (mounted) Navigator.of(context).pop();
   }
 
