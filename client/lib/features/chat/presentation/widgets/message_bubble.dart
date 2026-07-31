@@ -8,7 +8,8 @@ import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
 import 'package:uphone_client/core/utils/html_media_player.dart';
-import 'package:uphone_client/main.dart';
+import 'package:uphone_client/core/theme/chat_palette.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 
 class MessageBubble extends ConsumerWidget {
   final ChatMessage message;
@@ -91,6 +92,8 @@ class MessageBubble extends ConsumerWidget {
               final avatarUrl = senderAvatarUrl.isNotEmpty
                   ? senderAvatarUrl
                   : contactAvatar;
+              final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
+              final authorColor = chatTheme?.authorColor ?? colorScheme.primary;
               return Padding(
                 padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
                 child: Row(
@@ -116,7 +119,7 @@ class MessageBubble extends ConsumerWidget {
                     Text(
                       senderName,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.primary,
+                            color: authorColor,
                             fontWeight: FontWeight.w600,
                             fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
                           ),
@@ -147,8 +150,8 @@ class MessageBubble extends ConsumerWidget {
               color: isSelected
                   ? colorScheme.primary.withValues(alpha: 0.15)
                   : isMe
-                      ? colorScheme.primaryContainer
-                      : colorScheme.surfaceContainerHighest,
+                      ? colorScheme.primaryContainer.withValues(alpha: 0.85)
+                      : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(12),
                 topRight: const Radius.circular(12),
@@ -216,7 +219,7 @@ class MessageBubble extends ConsumerWidget {
                       ],
                       if (isMe) ...[
                         const SizedBox(width: 4),
-                        _buildStatusIcon(message.status, colorScheme),
+                        _buildStatusIcon(context, message.status, colorScheme),
                       ],
                     ],
                   ),
@@ -243,8 +246,8 @@ class MessageBubble extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isMy
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerHighest,
+                          ? colorScheme.primaryContainer.withValues(alpha: 0.85)
+                          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(12),
                       border: isMy
                           ? Border.all(color: colorScheme.primary, width: 1)
@@ -311,19 +314,22 @@ class MessageBubble extends ConsumerWidget {
 
   Widget _buildQuotePreview(BuildContext context, {required bool isMe}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
     final qm = quotedMessage!;
     final senderName = qm.sender?.displayName ?? qm.sender?.username ?? 'Unknown';
     final previewText = qm.content.isNotEmpty ? qm.content : '[${qm.type}]';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4, right: 4),
+      margin: const EdgeInsets.only(bottom: 4, top: 2),
+      padding: const EdgeInsets.only(left: 10, top: 6, bottom: 6, right: 6),
       decoration: BoxDecoration(
+        color: chatTheme?.quoteBackground ?? colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
         border: Border(
           left: BorderSide(
             color: isMe
-                ? colorScheme.onPrimaryContainer.withValues(alpha: 0.5)
-                : colorScheme.primary.withValues(alpha: 0.5),
+                ? colorScheme.onPrimaryContainer.withValues(alpha: 0.6)
+                : colorScheme.primary.withValues(alpha: 0.6),
             width: 3,
           ),
         ),
@@ -336,9 +342,9 @@ class MessageBubble extends ConsumerWidget {
             senderName,
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               color: isMe
-                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.8)
+                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.9)
                   : colorScheme.primary,
             ),
           ),
@@ -349,7 +355,7 @@ class MessageBubble extends ConsumerWidget {
             style: TextStyle(
               fontSize: 12,
               color: isMe
-                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.6)
+                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.65)
                   : colorScheme.onSurfaceVariant,
             ),
           ),
@@ -531,32 +537,34 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusIcon(String status, ColorScheme colorScheme) {
+  Widget _buildStatusIcon(BuildContext context, String status, ColorScheme colorScheme) {
+    final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
+    final readColor = chatTheme?.readTick ?? colorScheme.primary;
     final Color color;
     final IconData icon;
 
     switch (status) {
       case 'read':
-        color = colorScheme.primary;
+        color = readColor;
         icon = Icons.done_all;
         break;
       case 'delivered':
-        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.5);
+        color = readColor.withValues(alpha: 0.85);
         icon = Icons.done_all;
         break;
       case 'sent':
-        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.5);
+        color = readColor.withValues(alpha: 0.55);
         icon = Icons.done;
         break;
       default:
-        color = colorScheme.onPrimaryContainer.withValues(alpha: 0.3);
+        color = readColor.withValues(alpha: 0.35);
         icon = Icons.done;
         break;
     }
 
     return SizedBox(
-      width: 20,
-      child: Icon(icon, size: 12, color: color),
+      width: 22,
+      child: Icon(icon, size: 13, color: color),
     );
   }
 

@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
+import 'package:uphone_client/core/theme/chat_background.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 
 class ChatListScreen extends ConsumerStatefulWidget {
   const ChatListScreen({super.key});
@@ -28,6 +30,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final chatState = ref.watch(chatProvider);
     final authState = ref.watch(authProvider);
     final contactsState = ref.watch(contactsProvider);
+    final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     if (kIsWeb || Platform.isWindows) {
       return Scaffold(
@@ -112,9 +116,12 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
           ),
         ],
       ),
-      body: chatState.isLoadingChats
-          ? const Center(child: CircularProgressIndicator())
-          : chatState.chats.isEmpty
+      body: ChatBackgroundView(
+        background: background,
+        fill: backgroundFill,
+        child: chatState.isLoadingChats
+            ? const Center(child: CircularProgressIndicator())
+            : chatState.chats.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -155,6 +162,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     );
                   },
                 ),
+      ),
       floatingActionButton: kIsWeb
           ? null
           : Column(
@@ -250,6 +258,7 @@ class ChatTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
+      tileColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -272,7 +281,10 @@ class ChatTile extends StatelessWidget {
         chat.name.isNotEmpty ? chat.name : 'Chat',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       subtitle: lastMessage != null
           ? Text(

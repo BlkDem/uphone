@@ -14,6 +14,8 @@ import 'package:uphone_client/features/chat/presentation/media_viewer_screen.dar
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
 import 'package:uphone_client/features/calls/presentation/call_screen.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
+import 'package:uphone_client/core/theme/chat_background.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -291,6 +293,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = chatState.chats.where((c) => c.id == widget.chatId).toList();
     final unreadCount = chat.isNotEmpty ? chat.first.unreadCount : 0;
     final chatName = currentChat?.name ?? 'Chat';
+    final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     return Scaffold(
       appBar: _isSelectionMode
@@ -400,31 +404,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
       body: Stack(
         children: [
-          Column(
-            children: [
-              Expanded(
-                child: chatState.isLoadingMessages
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildMessageList(chatState, authState, contactsState),
+          Positioned.fill(
+            child: ChatBackgroundView(
+              background: background,
+              fill: backgroundFill,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: chatState.isLoadingMessages
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildMessageList(chatState, authState, contactsState),
+                  ),
+                  MessageInput(
+                    onSend: (content) => _sendMessage(content),
+                    onSendFile: (filename, mimeType, bytes) =>
+                        _sendFile(filename, mimeType, bytes),
+                    onTypingStart: () =>
+                        ref.read(chatProvider.notifier).sendTypingStart(widget.chatId),
+                    onTypingStop: () =>
+                        ref.read(chatProvider.notifier).sendTypingStop(widget.chatId),
+                    editingMessage: _editingMessageId != null
+                        ? ref.read(chatProvider).messages
+                            .where((m) => m.id == _editingMessageId)
+                            .firstOrNull
+                        : null,
+                    onCancelEdit: () => setState(() => _editingMessageId = null),
+                    quotedMessages: _quotedMessages,
+                    onCancelQuote: () => setState(() => _quotedMessages = []),
+                  ),
+                ],
               ),
-              MessageInput(
-                onSend: (content) => _sendMessage(content),
-                onSendFile: (filename, mimeType, bytes) =>
-                    _sendFile(filename, mimeType, bytes),
-                onTypingStart: () =>
-                    ref.read(chatProvider.notifier).sendTypingStart(widget.chatId),
-                onTypingStop: () =>
-                    ref.read(chatProvider.notifier).sendTypingStop(widget.chatId),
-                editingMessage: _editingMessageId != null
-                    ? ref.read(chatProvider).messages
-                        .where((m) => m.id == _editingMessageId)
-                        .firstOrNull
-                    : null,
-                onCancelEdit: () => setState(() => _editingMessageId = null),
-                quotedMessages: _quotedMessages,
-                onCancelQuote: () => setState(() => _quotedMessages = []),
-              ),
-            ],
+            ),
           ),
           if (!_isNearBottom)
             Positioned(

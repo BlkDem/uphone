@@ -336,7 +336,7 @@ class _MessageInputState extends State<MessageInput> {
             bottom: MediaQuery.of(context).viewInsets.bottom + 8,
           ),
           decoration: BoxDecoration(
-            color: colorScheme.surface,
+            color: colorScheme.surface.withValues(alpha: 0.8),
             border: Border(
               top: BorderSide(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.3),

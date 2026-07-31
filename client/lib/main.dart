@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'core/config/server_config.dart';
 import 'core/config/app_settings.dart';
+import 'core/config/app_providers.dart';
 import 'core/network/ws_service_bridge.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/platform/windows_tray_service.dart';
@@ -14,9 +15,6 @@ import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'features/auth/domain/auth_provider.dart';
 import 'features/calls/presentation/incoming_call_listener.dart';
-
-final themeModeProvider = StateProvider<ThemeMode>((ref) => AppSettings.instance.themeMode);
-final chatFontSizeProvider = StateProvider<double>((ref) => AppSettings.instance.chatFontSize);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,12 +97,14 @@ class _UPhoneAppState extends ConsumerState<UPhoneApp> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final palette = ref.watch(chatPaletteProvider);
+    final font = ref.watch(fontProvider);
 
     return MaterialApp.router(
       title: 'UPhone',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.light(palette: palette, font: font),
+      darkTheme: AppTheme.dark(palette: palette, font: font),
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) => IncomingCallListener(child: child ?? const SizedBox()),
