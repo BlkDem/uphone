@@ -31,7 +31,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final themeMode = ref.watch(themeModeProvider);
     final currentPalette = ref.watch(chatPaletteProvider);
 
     return Scaffold(
@@ -56,36 +55,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(),
           _SectionHeader(title: 'Appearance', theme: theme),
-          ListTile(
-            leading: Icon(
-              switch (themeMode) {
-                ThemeMode.light => Icons.light_mode,
-                ThemeMode.dark => Icons.dark_mode,
-                ThemeMode.system => Icons.brightness_auto,
-              },
-            ),
-            title: const Text('Theme'),
-            subtitle: Text(
-              switch (themeMode) {
-                ThemeMode.light => 'Light',
-                ThemeMode.dark => 'Dark',
-                ThemeMode.system => 'System',
-              },
-            ),
-            trailing: SegmentedButton<ThemeMode>(
-              segments: const [
-                ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode, size: 18)),
-                ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto, size: 18)),
-                ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode, size: 18)),
-              ],
-              selected: {themeMode},
-              onSelectionChanged: (selected) {
-                final mode = selected.first;
-                ref.read(themeModeProvider.notifier).state = mode;
-                AppSettings.instance.themeMode = mode;
-              },
-            ),
-          ),
           ListTile(
             leading: const Icon(Icons.text_fields),
             title: const Text('Chat font size'),

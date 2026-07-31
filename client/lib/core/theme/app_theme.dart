@@ -20,10 +20,15 @@ class AppTheme {
       brightness: brightness,
     ).copyWith(
       surface: p.background,
+      surfaceContainerLowest: p.background,
+      surfaceContainerLow: p.background,
+      surfaceContainer: p.background,
+      surfaceContainerHigh: p.background,
+      surfaceContainerHighest: p.otherBubble,
       primaryContainer: p.ownBubble,
       onPrimaryContainer: p.ownText,
-      surfaceContainerHighest: p.otherBubble,
       onSurface: p.otherText,
+      onSurfaceVariant: p.otherText.withValues(alpha: 0.7),
     );
   }
 
