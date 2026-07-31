@@ -59,13 +59,27 @@ class MessageBubble extends ConsumerWidget {
               color: colorScheme.surface.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              message.content,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12.5,
-                  ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  message.content,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12.5,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('HH:mm').format(message.createdAt),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                        fontSize: 10,
+                      ),
+                ),
+              ],
             ),
           ),
         ),
