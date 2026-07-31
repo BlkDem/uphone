@@ -6,6 +6,8 @@ import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/chat/presentation/chat_list_screen.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/features/contacts/presentation/contact_form_screen.dart';
+import 'package:uphone_client/core/theme/chat_background.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 
 class WebChatSidebar extends ConsumerStatefulWidget {
   const WebChatSidebar({super.key});
@@ -28,6 +30,7 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
     final authState = ref.watch(authProvider);
+    final background = ref.watch(chatBackgroundProvider);
 
     return Container(
       width: 320,
@@ -132,9 +135,11 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
           ),
           const Divider(height: 1),
           Expanded(
-            child: chatState.isLoadingChats
-                ? const Center(child: CircularProgressIndicator())
-                : chatState.chats.isEmpty
+            child: ChatBackgroundView(
+              background: background,
+              child: chatState.isLoadingChats
+                  ? const Center(child: CircularProgressIndicator())
+                  : chatState.chats.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -172,8 +177,9 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
                               },
                             ),
                           );
-                        },
-                      ),
+                          },
+                        ),
+            ),
           ),
         ],
       ),

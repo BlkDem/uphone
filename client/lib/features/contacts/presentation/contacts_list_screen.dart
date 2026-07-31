@@ -9,6 +9,8 @@ import 'package:uphone_client/features/calls/presentation/call_screen.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/contacts/domain/contacts_provider.dart';
 import 'package:uphone_client/features/contacts/presentation/contact_form_screen.dart';
+import 'package:uphone_client/core/theme/chat_background.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 import 'package:uphone_client/shared/models/contact.dart';
 
 class ContactsListScreen extends ConsumerStatefulWidget {
@@ -37,6 +39,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
   @override
   Widget build(BuildContext context) {
     final contactsState = ref.watch(contactsProvider);
+    final background = ref.watch(chatBackgroundProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -106,9 +109,11 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
           ),
         ],
       ),
-      body: contactsState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : contactsState.contacts.isEmpty
+      body: ChatBackgroundView(
+        background: background,
+        child: contactsState.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : contactsState.contacts.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -154,6 +159,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
                     );
                   },
                 ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addContact(context),
         child: const Icon(Icons.person_add),
@@ -443,7 +449,10 @@ class ContactTile extends StatelessWidget {
                     contact.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (contact.email != null || contact.phone != null)
                     Text(

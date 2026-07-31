@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uphone_client/core/theme/app_fonts.dart';
 import 'package:uphone_client/core/theme/chat_palette.dart';
 
 class AppTheme {
-  static ThemeData light({ChatPalette? palette}) {
+  static ThemeData light({ChatPalette? palette, AppFont? font}) {
     final colorScheme = _scheme(Brightness.light, palette);
-    return _buildTheme(colorScheme, palette);
+    return _buildTheme(colorScheme, palette, font);
   }
 
-  static ThemeData dark({ChatPalette? palette}) {
+  static ThemeData dark({ChatPalette? palette, AppFont? font}) {
     final colorScheme = _scheme(Brightness.dark, palette);
-    return _buildTheme(colorScheme, palette);
+    return _buildTheme(colorScheme, palette, font);
   }
 
   static ColorScheme _scheme(Brightness brightness, ChatPalette? palette) {
@@ -32,9 +32,9 @@ class AppTheme {
     );
   }
 
-  static ThemeData _buildTheme(ColorScheme colorScheme, ChatPalette? palette) {
+  static ThemeData _buildTheme(ColorScheme colorScheme, ChatPalette? palette, AppFont? font) {
     final p = palette ?? ChatPalettes.standard;
-    final textTheme = GoogleFonts.interTextTheme(
+    final textTheme = (font ?? AppFonts.inter).apply(
       ThemeData(colorScheme: colorScheme).textTheme,
     );
 

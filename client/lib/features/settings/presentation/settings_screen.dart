@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
 import 'package:uphone_client/core/network/battery_optimization.dart';
+import 'package:uphone_client/core/theme/chat_background.dart';
 import 'package:uphone_client/core/theme/chat_palette.dart';
-import 'package:uphone_client/main.dart';
+import 'package:uphone_client/core/theme/app_fonts.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 import 'package:uphone_client/features/settings/presentation/palette_settings_screen.dart';
 import 'package:uphone_client/features/settings/presentation/profile_screen.dart';
 
@@ -32,6 +35,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentPalette = ref.watch(chatPaletteProvider);
+    final currentBackground = ref.watch(chatBackgroundProvider);
+    final currentFont = ref.watch(fontProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -92,6 +97,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+          _SectionHeader(title: 'Chat font', theme: theme),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final font in AppFonts.all)
+                  ChoiceChip(
+                    label: Text(font.name),
+                    selected: currentFont.id == font.id,
+                    onSelected: (_) {
+                      AppSettings.instance.fontFamilyId = font.id;
+                      ref.read(fontProvider.notifier).state = font;
+                    },
+                  ),
+              ],
+            ),
+          ),
           const Divider(),
           _SectionHeader(title: 'Chat Palette', theme: theme),
           Padding(
@@ -121,6 +145,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const PaletteSettingsScreen()),
             ),
           ),
+          const Divider(),
+          _SectionHeader(title: 'Wallpaper', theme: theme),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final bg in ChatBackgrounds.presets)
+                  _WallpaperSwatch(
+                    background: bg,
+                    selected: currentBackground.id == bg.id,
+                    onTap: () {
+                      AppSettings.instance.chatBackground = bg;
+                      ref.read(chatBackgroundProvider.notifier).state = bg;
+                    },
+                  ),
+                if (currentBackground.isCustom)
+                  _WallpaperSwatch(
+                    background: currentBackground,
+                    selected: true,
+                    onTap: () {},
+                  ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_photo_alternate_outlined),
+            title: const Text('Custom image'),
+            subtitle: const Text('Pick an image from your device'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _pickCustomWallpaper,
+          ),
+          if (currentBackground.isCustom)
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Remove custom image'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                AppSettings.instance.chatBackground = ChatBackgrounds.none;
+                ref.read(chatBackgroundProvider.notifier).state = ChatBackgrounds.none;
+              },
+            ),
           const Divider(),
           _SectionHeader(title: 'Media Gallery', theme: theme),
           SwitchListTile(
@@ -190,6 +257,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickCustomWallpaper() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final raw = file.bytes;
+    if (raw == null) return;
+    final bytes = await compressWallpaperImage(raw);
+    final bg = ChatBackgrounds.custom(bytes);
+    AppSettings.instance.chatBackground = bg;
+    ref.read(chatBackgroundProvider.notifier).state = bg;
   }
 }
 
@@ -271,6 +353,92 @@ class _PaletteSwatch extends StatelessWidget {
                 color: selected
                     ? Theme.of(context).colorScheme.primary
                     : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WallpaperSwatch extends StatelessWidget {
+  final ChatBackground background;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _WallpaperSwatch({
+    required this.background,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget preview;
+    if (background.isNone) {
+      preview = Container(
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Icon(Icons.wallpaper, color: theme.colorScheme.onSurfaceVariant),
+      );
+    } else if (background.isCustom) {
+      preview = Image.memory(
+        background.bytes!,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    } else {
+      preview = Image.asset(
+        background.assetPath!,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? theme.colorScheme.primary : Colors.black12,
+                width: selected ? 3 : 1.5,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  preview,
+                  if (selected)
+                    Container(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                      child: const Icon(Icons.check, color: Colors.white, size: 20),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 64,
+            child: Text(
+              background.name,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),

@@ -9,7 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uphone_client/core/utils/download_helper.dart';
 import 'package:uphone_client/core/utils/html_media_player.dart';
 import 'package:uphone_client/core/theme/chat_palette.dart';
-import 'package:uphone_client/main.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 
 class MessageBubble extends ConsumerWidget {
   final ChatMessage message;

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
 import 'package:uphone_client/core/theme/chat_palette.dart';
-import 'package:uphone_client/main.dart';
+import 'package:uphone_client/core/config/app_providers.dart';
 
 class PaletteSettingsScreen extends ConsumerStatefulWidget {
   const PaletteSettingsScreen({super.key});
