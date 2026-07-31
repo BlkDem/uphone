@@ -398,6 +398,344 @@ func TestConferenceCallLeaveLastRemovesCall(t *testing.T) {
 	}
 }
 
+func TestCallEndedHook(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	var ended *CallEndedInfo
+	hub.OnCallEnded = func(info *CallEndedInfo) {
+		ended = info
+	}
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType: "video",
+		ChatID:   "chat-1",
+		FromName: "Alice",
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "call-010",
+		ToUser:  "user-2",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallAccept,
+		CallID: "call-010",
+		ToUser: "user-1",
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallEnd,
+		CallID: "call-010",
+	}, sendTo)
+
+	if ended == nil {
+		t.Fatal("expected OnCallEnded to be called")
+	}
+	if ended.ChatID != "chat-1" || ended.CallerID != "user-1" || ended.CallerName != "Alice" {
+		t.Errorf("unexpected ended info: %+v", ended)
+	}
+	if ended.CalleeID != "user-2" {
+		t.Errorf("expected callee user-2, got %s", ended.CalleeID)
+	}
+	if ended.AnsweredAt.IsZero() {
+		t.Error("expected AnsweredAt to be set")
+	}
+	if ended.EndedAt.Before(ended.AnsweredAt) {
+		t.Error("expected EndedAt not before AnsweredAt")
+	}
+}
+
+func TestCallEndHookNotFiredOnMissed(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	var missed *MissedCallInfo
+	var ended *CallEndedInfo
+	hub.OnMissedCall = func(info *MissedCallInfo) {
+		missed = info
+	}
+	hub.OnCallEnded = func(info *CallEndedInfo) {
+		ended = info
+	}
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType: "audio",
+		ChatID:   "chat-1",
+		FromName: "Alice",
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "call-011",
+		ToUser:  "user-2",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallEnd,
+		CallID: "call-011",
+	}, sendTo)
+
+	if missed == nil {
+		t.Fatal("expected OnMissedCall to be called")
+	}
+	if ended != nil {
+		t.Fatal("expected OnCallEnded NOT to be called for a missed call")
+	}
+}
+
+func TestConferenceCallEndedOnLastLeave(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	var ended *CallEndedInfo
+	hub.OnCallEnded = func(info *CallEndedInfo) {
+		ended = info
+	}
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-3",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-010",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-3", &SignalMessage{
+		Type:   SignalCallJoin,
+		CallID: "conf-010",
+	}, sendTo)
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-010",
+	}, sendTo)
+
+	if ended != nil {
+		t.Fatal("expected OnCallEnded not fired until all participants leave")
+	}
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-010",
+	}, sendTo)
+
+	hub.HandleSignal("user-3", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-010",
+	}, sendTo)
+
+	if ended == nil {
+		t.Fatal("expected OnCallEnded to be called when last participant leaves")
+	}
+	if ended.ChatID != "chat-group-3" || ended.CallerID != "user-1" || ended.CallerName != "Alice" {
+		t.Errorf("unexpected ended info: %+v", ended)
+	}
+	if ended.AnsweredAt.IsZero() {
+		t.Error("expected AnsweredAt to be set after join")
+	}
+}
+
+func TestConferenceCallNoEndedOnUnansweredLeave(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	var ended *CallEndedInfo
+	hub.OnCallEnded = func(info *CallEndedInfo) {
+		ended = info
+	}
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "audio",
+		ChatID:       "chat-group-4",
+		FromName:     "Bob",
+		Participants: []string{"user-1", "user-2"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-011",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-011",
+	}, sendTo)
+
+	if ended != nil {
+		t.Fatal("expected OnCallEnded not fired for unanswered call")
+	}
+}
+
+func TestConferenceCallMissed(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	var ended *CallEndedInfo
+	hub.OnCallEnded = func(info *CallEndedInfo) {
+		ended = info
+	}
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType:     "video",
+		ChatID:       "chat-group-5",
+		FromName:     "Alice",
+		Participants: []string{"user-1", "user-2"},
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "conf-012",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallJoin,
+		CallID: "conf-012",
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallLeave,
+		CallID: "conf-012",
+	}, sendTo)
+
+	if ended != nil {
+		t.Fatal("expected OnCallEnded not fired while caller still in call")
+	}
+}
+
+func TestOrphanAcceptNotRelayed(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallAccept,
+		CallID: "ghost-call-001",
+		ToUser: "user-2",
+	}, sendTo)
+
+	if _, ok := sent["user-2"]; ok {
+		t.Error("expected orphan call-accept NOT to be relayed")
+	}
+}
+
+func TestOrphanRejectNotRelayed(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallReject,
+		CallID: "ghost-call-002",
+		ToUser: "user-2",
+	}, sendTo)
+
+	if _, ok := sent["user-2"]; ok {
+		t.Error("expected orphan call-reject NOT to be relayed")
+	}
+}
+
+func TestOrphanAcceptAfterEndNotRelayed(t *testing.T) {
+	hub := NewSignalHub()
+	sent := make(map[string][]SignalMessage)
+
+	sendTo := func(userID string, data []byte) {
+		var msg SignalMessage
+		json.Unmarshal(data, &msg)
+		sent[userID] = append(sent[userID], msg)
+	}
+
+	payload, _ := json.Marshal(CallRequestPayload{
+		CallType: "video",
+		ChatID:   "chat-1",
+		FromName: "Alice",
+	})
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:    SignalCallRequest,
+		CallID:  "call-020",
+		ToUser:  "user-2",
+		Payload: payload,
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallAccept,
+		CallID: "call-020",
+		ToUser: "user-1",
+	}, sendTo)
+
+	hub.HandleSignal("user-2", &SignalMessage{
+		Type:   SignalCallEnd,
+		CallID: "call-020",
+	}, sendTo)
+
+	beforeCallee := len(sent["user-2"])
+	beforeCaller := len(sent["user-1"])
+
+	hub.HandleSignal("user-1", &SignalMessage{
+		Type:   SignalCallAccept,
+		CallID: "call-020",
+		ToUser: "user-2",
+	}, sendTo)
+
+	if len(sent["user-2"]) != beforeCallee {
+		t.Error("expected late call-accept after call end NOT to be relayed")
+	}
+	if len(sent["user-1"]) != beforeCaller {
+		t.Error("expected no extra messages to the caller")
+	}
+}
+
 func TestConferenceRelay(t *testing.T) {
 	hub := NewSignalHub()
 	sent := make(map[string][]SignalMessage)
