@@ -18,6 +18,21 @@ import 'package:uphone_client/core/theme/chat_background.dart';
 import 'package:uphone_client/core/config/app_providers.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 
+const _ruMonths = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
 class ChatScreen extends ConsumerStatefulWidget {
   final String chatId;
 
@@ -94,14 +109,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final atBottom = maxExtent - pixels < 80;
 
       if (atBottom && !_isNearBottom) {
-        _isNearBottom = true;
+        _setNearBottom(true);
         if (_initialScrollDone) {
-          ref.read(chatProvider.notifier).markAsRead(widget.chatId, messages.last.id);
+          ref
+              .read(chatProvider.notifier)
+              .markAsRead(widget.chatId, messages.last.id);
         }
       } else if (!atBottom && _isNearBottom) {
-        _isNearBottom = false;
+        _setNearBottom(false);
       }
     } catch (_) {}
+  }
+
+  void _setNearBottom(bool value) {
+    if (_isNearBottom == value || !mounted) return;
+    setState(() => _isNearBottom = value);
   }
 
   void _handleScrollPosition(List<int> indices) {
@@ -113,14 +135,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final atBottom = maxIndex >= messages.length - 2;
 
     if (atBottom && !_isNearBottom) {
-      _isNearBottom = true;
-      ref.read(chatProvider.notifier).markAsRead(widget.chatId, messages.last.id);
+      _setNearBottom(true);
+      ref
+          .read(chatProvider.notifier)
+          .markAsRead(widget.chatId, messages.last.id);
     } else if (!atBottom && _isNearBottom) {
-      _isNearBottom = false;
+      _setNearBottom(false);
     }
 
     final minIndex = indices.reduce((a, b) => a < b ? a : b);
-    if (minIndex < 5 && chatState.hasMoreMessages && !chatState.isLoadingOlder) {
+    if (minIndex < 5 &&
+        chatState.hasMoreMessages &&
+        !chatState.isLoadingOlder) {
       ref.read(chatProvider.notifier).loadOlderMessages();
     }
   }
@@ -134,9 +160,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final targetIndex = unreadCount > 0
         ? (msgCount - unreadCount).clamp(0, msgCount - 1)
         : msgCount - 1;
-    _isNearBottom = unreadCount == 0;
+    _setNearBottom(unreadCount == 0);
 
-    debugPrint('SCROLL unread=$unreadCount msgCount=$msgCount target=$targetIndex retries=$_scrollRetries');
+    debugPrint(
+      'SCROLL unread=$unreadCount msgCount=$msgCount target=$targetIndex retries=$_scrollRetries',
+    );
 
     if (kIsWeb) {
       _scrollToTargetWeb(targetIndex);
@@ -155,13 +183,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       if (!_scrollController.hasClients) {
         _scrollRetries++;
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetWeb(targetIndex));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToTargetWeb(targetIndex),
+        );
         return;
       }
 
       final maxExtent = _scrollController.position.maxScrollExtent;
       final pixels = _scrollController.position.pixels;
-      debugPrint('SCROLL web: pixels=$pixels maxExtent=$maxExtent retries=$_scrollRetries');
+      debugPrint(
+        'SCROLL web: pixels=$pixels maxExtent=$maxExtent retries=$_scrollRetries',
+      );
 
       if (maxExtent <= 0 && _scrollRetries < 10) {
         _scrollRetries++;
@@ -179,21 +211,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       debugPrint('SCROLL web: scrolling to $maxExtent');
       _scrollController
-          .animateTo(maxExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut)
+          .animateTo(
+            maxExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          )
           .then((_) {
-        if (_scrollController.hasClients) {
-          final newMax = _scrollController.position.maxScrollExtent;
-          final pos = _scrollController.position.pixels;
-          debugPrint('SCROLL web: animate done, pixels=$pos newMax=$newMax');
-          if (newMax > pos + 1) {
-            _scrollController.jumpTo(newMax);
-            debugPrint('SCROLL web: snapped to $newMax');
-          }
-        }
-        _initialScrollDone = true;
-      }).catchError((e) {
-        debugPrint('SCROLL web: scroll error: $e');
-      });
+            if (_scrollController.hasClients) {
+              final newMax = _scrollController.position.maxScrollExtent;
+              final pos = _scrollController.position.pixels;
+              debugPrint(
+                'SCROLL web: animate done, pixels=$pos newMax=$newMax',
+              );
+              if (newMax > pos + 1) {
+                _scrollController.jumpTo(newMax);
+                debugPrint('SCROLL web: snapped to $newMax');
+              }
+            }
+            _initialScrollDone = true;
+          })
+          .catchError((e) {
+            debugPrint('SCROLL web: scroll error: $e');
+          });
     } catch (e) {
       debugPrint('SCROLL web: position error: $e, retrying');
       _scrollRetries++;
@@ -206,7 +245,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _scrollToTargetNative(int targetIndex) {
     if (!_itemScrollController.isAttached) {
       _scrollRetries++;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetNative(targetIndex));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToTargetNative(targetIndex),
+      );
       return;
     }
 
@@ -242,7 +283,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final authState = ref.watch(authProvider);
 
     ref.listen<ChatState>(chatProvider, (prev, next) {
-      if (!next.isLoadingMessages && next.messages.isNotEmpty && !_initialScrollDone) {
+      if (!next.isLoadingMessages &&
+          next.messages.isNotEmpty &&
+          !_initialScrollDone) {
         _scrollRetries = 0;
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
       }
@@ -279,14 +322,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     });
 
-    final currentChat = chatState.chats.where((c) => c.id == widget.chatId).firstOrNull;
+    final currentChat = chatState.chats
+        .where((c) => c.id == widget.chatId)
+        .firstOrNull;
 
     final contactsState = ref.watch(contactsProvider);
-    final contactAvatar = currentChat != null && currentChat.type == 'personal' && currentChat.avatarUrl.isEmpty
+    final contactAvatar =
+        currentChat != null &&
+            currentChat.type == 'personal' &&
+            currentChat.avatarUrl.isEmpty
         ? _findContactAvatar(contactsState.contacts, currentChat.name)
         : null;
 
-    final displayAvatar = currentChat != null && currentChat.avatarUrl.isNotEmpty
+    final displayAvatar =
+        currentChat != null && currentChat.avatarUrl.isNotEmpty
         ? currentChat.avatarUrl
         : contactAvatar;
 
@@ -308,7 +357,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 IconButton(
                   icon: const Icon(Icons.reply_outlined),
                   tooltip: 'Quote',
-                  onPressed: _selectedIds.isNotEmpty ? () => _quoteMessages(_selectedIds.toList()) : null,
+                  onPressed: _selectedIds.isNotEmpty
+                      ? () => _quoteMessages(_selectedIds.toList())
+                      : null,
                 ),
                 IconButton(
                   icon: const Icon(Icons.forward_outlined),
@@ -334,8 +385,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    backgroundImage: displayAvatar != null && displayAvatar.isNotEmpty
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer,
+                    backgroundImage:
+                        displayAvatar != null && displayAvatar.isNotEmpty
                         ? NetworkImage(displayAvatar)
                         : null,
                     child: (displayAvatar == null || displayAvatar.isEmpty)
@@ -344,7 +398,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 ? chatName[0].toUpperCase()
                                 : '?',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
                             ),
                           )
                         : null,
@@ -362,7 +418,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         if (chatState.typingUsers.isNotEmpty)
                           Text(
                             'typing...',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
                           ),
@@ -374,7 +431,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.photo_library_outlined),
-                  onPressed: () => context.push('/chats/${widget.chatId}/gallery'),
+                  onPressed: () =>
+                      context.push('/chats/${widget.chatId}/gallery'),
                 ),
                 if (currentChat == null || currentChat.type == 'personal')
                   IconButton(
@@ -413,22 +471,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   Expanded(
                     child: chatState.isLoadingMessages
                         ? const Center(child: CircularProgressIndicator())
-                        : _buildMessageList(chatState, authState, contactsState),
+                        : _buildMessageList(
+                            chatState,
+                            authState,
+                            contactsState,
+                          ),
                   ),
                   MessageInput(
                     onSend: (content) => _sendMessage(content),
                     onSendFile: (filename, mimeType, bytes) =>
                         _sendFile(filename, mimeType, bytes),
-                    onTypingStart: () =>
-                        ref.read(chatProvider.notifier).sendTypingStart(widget.chatId),
-                    onTypingStop: () =>
-                        ref.read(chatProvider.notifier).sendTypingStop(widget.chatId),
+                    onTypingStart: () => ref
+                        .read(chatProvider.notifier)
+                        .sendTypingStart(widget.chatId),
+                    onTypingStop: () => ref
+                        .read(chatProvider.notifier)
+                        .sendTypingStop(widget.chatId),
                     editingMessage: _editingMessageId != null
-                        ? ref.read(chatProvider).messages
-                            .where((m) => m.id == _editingMessageId)
-                            .firstOrNull
+                        ? ref
+                              .read(chatProvider)
+                              .messages
+                              .where((m) => m.id == _editingMessageId)
+                              .firstOrNull
                         : null,
-                    onCancelEdit: () => setState(() => _editingMessageId = null),
+                    onCancelEdit: () =>
+                        setState(() => _editingMessageId = null),
                     quotedMessages: _quotedMessages,
                     onCancelQuote: () => setState(() => _quotedMessages = []),
                   ),
@@ -457,10 +524,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             color: Colors.red,
                             shape: BoxShape.circle,
                           ),
-                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
                           child: Text(
                             '$unreadCount',
-                            style: const TextStyle(color: Colors.white, fontSize: 10),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -474,14 +547,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildMessageList(ChatState chatState, AuthState authState, ContactsState contactsState) {
+  bool _isSameDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
+  Widget _buildDayChip(DateTime date) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _formatDayLabel(date),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDayLabel(DateTime date) {
+    final local = date.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Сегодня';
+    if (diff == 1) return 'Вчера';
+    return '${local.day} ${_ruMonths[local.month - 1]} ${local.year}';
+  }
+
+  Widget _buildMessageList(
+    ChatState chatState,
+    AuthState authState,
+    ContactsState contactsState,
+  ) {
     if (kIsWeb) {
       return _buildWebList(chatState, authState, contactsState);
     }
     return _buildNativeList(chatState, authState, contactsState);
   }
 
-  Widget _buildWebList(ChatState chatState, AuthState authState, ContactsState contactsState) {
+  Widget _buildWebList(
+    ChatState chatState,
+    AuthState authState,
+    ContactsState contactsState,
+  ) {
     final contactAvatars = <String, String>{};
     for (final c in contactsState.contacts) {
       if (c.avatarUrl != null && c.avatarUrl!.isNotEmpty) {
@@ -509,32 +630,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
         final msg = chatState.messages[index];
         final isMe = msg.senderId == authState.user?.id;
-        final showSender = !isMe &&
+        final showSender =
+            !isMe &&
             (index == 0 ||
                 chatState.messages[index - 1].senderId != msg.senderId);
         final quotedMessage = _resolveQuoted(msg, chatState);
+        final showDayChip =
+            index == 0 ||
+            !_isSameDay(chatState.messages[index - 1].createdAt, msg.createdAt);
 
-        return GestureDetector(
-          child: MessageBubble(
-            message: msg,
-            isMe: isMe,
-            showSender: showSender,
-            contactAvatars: contactAvatars,
-            isSelected: _selectedIds.contains(msg.id),
-            selectionMode: _isSelectionMode,
-            onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
-            onSelect: () {
-              _onMessageLongPress(msg.id);
-            },
-            onEdit: isMe ? () => _startEdit(msg.id) : null,
-            onDelete: () => _deleteMessage(msg.id),
-            onReact: (emoji) => _addReaction(msg.id, emoji),
-            onForward: () => _forwardMessage(msg.id),
-            onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
-                ? () => _openImage(msg)
-                : null,
-            quotedMessage: quotedMessage,
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showDayChip) _buildDayChip(msg.createdAt),
+            GestureDetector(
+              child: MessageBubble(
+                message: msg,
+                isMe: isMe,
+                showSender: showSender,
+                contactAvatars: contactAvatars,
+                isSelected: _selectedIds.contains(msg.id),
+                selectionMode: _isSelectionMode,
+                onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
+                onSelect: () {
+                  _onMessageLongPress(msg.id);
+                },
+                onEdit: isMe ? () => _startEdit(msg.id) : null,
+                onDelete: () => _deleteMessage(msg.id),
+                onReact: (emoji) => _addReaction(msg.id, emoji),
+                onForward: () => _forwardMessage(msg.id),
+                onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
+                    ? () => _openImage(msg)
+                    : null,
+                quotedMessage: quotedMessage,
+              ),
+            ),
+          ],
         );
       },
     );
@@ -547,7 +678,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return state.messageCache[ids.first];
   }
 
-  Widget _buildNativeList(ChatState chatState, AuthState authState, ContactsState contactsState) {
+  Widget _buildNativeList(
+    ChatState chatState,
+    AuthState authState,
+    ContactsState contactsState,
+  ) {
     final contactAvatars = <String, String>{};
     for (final c in contactsState.contacts) {
       if (c.avatarUrl != null && c.avatarUrl!.isNotEmpty) {
@@ -576,32 +711,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
         final msg = chatState.messages[index];
         final isMe = msg.senderId == authState.user?.id;
-        final showSender = !isMe &&
+        final showSender =
+            !isMe &&
             (index == 0 ||
                 chatState.messages[index - 1].senderId != msg.senderId);
         final quotedMessage = _resolveQuoted(msg, chatState);
+        final showDayChip =
+            index == 0 ||
+            !_isSameDay(chatState.messages[index - 1].createdAt, msg.createdAt);
 
-        return GestureDetector(
-          child: MessageBubble(
-            message: msg,
-            isMe: isMe,
-            showSender: showSender,
-            contactAvatars: contactAvatars,
-            isSelected: _selectedIds.contains(msg.id),
-            selectionMode: _isSelectionMode,
-            onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
-            onSelect: () {
-              _onMessageLongPress(msg.id);
-            },
-            onEdit: isMe ? () => _startEdit(msg.id) : null,
-            onDelete: () => _deleteMessage(msg.id),
-            onReact: (emoji) => _addReaction(msg.id, emoji),
-            onForward: () => _forwardMessage(msg.id),
-            onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
-                ? () => _openImage(msg)
-                : null,
-            quotedMessage: quotedMessage,
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showDayChip) _buildDayChip(msg.createdAt),
+            GestureDetector(
+              child: MessageBubble(
+                message: msg,
+                isMe: isMe,
+                showSender: showSender,
+                contactAvatars: contactAvatars,
+                isSelected: _selectedIds.contains(msg.id),
+                selectionMode: _isSelectionMode,
+                onTap: _isSelectionMode ? () => _toggleSelection(msg.id) : null,
+                onSelect: () {
+                  _onMessageLongPress(msg.id);
+                },
+                onEdit: isMe ? () => _startEdit(msg.id) : null,
+                onDelete: () => _deleteMessage(msg.id),
+                onReact: (emoji) => _addReaction(msg.id, emoji),
+                onForward: () => _forwardMessage(msg.id),
+                onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
+                    ? () => _openImage(msg)
+                    : null,
+                quotedMessage: quotedMessage,
+              ),
+            ),
+          ],
         );
       },
     );
@@ -609,15 +754,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _sendMessage(String content) {
     if (_editingMessageId != null) {
-      ref.read(chatProvider.notifier).editMessage(
-            widget.chatId,
-            _editingMessageId!,
-            content,
-          );
+      ref
+          .read(chatProvider.notifier)
+          .editMessage(widget.chatId, _editingMessageId!, content);
       setState(() => _editingMessageId = null);
     } else {
       final replyTo = _replyToParam;
-      ref.read(chatProvider.notifier).sendMessage(widget.chatId, content, replyTo: replyTo);
+      ref
+          .read(chatProvider.notifier)
+          .sendMessage(widget.chatId, content, replyTo: replyTo);
       if (replyTo.isNotEmpty) {
         setState(() => _quotedMessages = []);
       }
@@ -627,7 +772,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _sendFile(String filename, String mimeType, Uint8List bytes) {
     final replyTo = _replyToParam;
-    ref.read(chatProvider.notifier).sendFile(widget.chatId, filename, mimeType, bytes, replyTo: replyTo);
+    ref
+        .read(chatProvider.notifier)
+        .sendFile(widget.chatId, filename, mimeType, bytes, replyTo: replyTo);
     if (replyTo.isNotEmpty) {
       setState(() => _quotedMessages = []);
     }
@@ -654,8 +801,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _quoteMessages(List<String> msgIds) {
     final chatState = ref.read(chatProvider);
-    final msgs = msgIds.map((id) => chatState.messages.where((m) => m.id == id).firstOrNull)
-        .whereType<ChatMessage>().toList();
+    final msgs = msgIds
+        .map((id) => chatState.messages.where((m) => m.id == id).firstOrNull)
+        .whereType<ChatMessage>()
+        .toList();
     if (msgs.isNotEmpty) {
       setState(() {
         _quotedMessages = msgs;
@@ -681,7 +830,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () {
               Navigator.of(ctx).pop();
               for (final id in _selectedIds.toList()) {
-                ref.read(chatProvider.notifier).deleteMessage(widget.chatId, id);
+                ref
+                    .read(chatProvider.notifier)
+                    .deleteMessage(widget.chatId, id);
               }
               setState(_selectedIds.clear);
             },
@@ -697,10 +848,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final ids = _selectedIds.toList();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ForwardMessageSheet(
-          sourceChatId: widget.chatId,
-          messageIds: ids,
-        ),
+        builder: (_) =>
+            ForwardMessageSheet(sourceChatId: widget.chatId, messageIds: ids),
       ),
     );
     setState(_selectedIds.clear);
@@ -713,12 +862,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _deleteMessage(String msgId) {
     final chatState = ref.read(chatProvider);
     final authState = ref.read(authProvider);
-    final currentChat = chatState.chats.where((c) => c.id == widget.chatId).firstOrNull;
+    final currentChat = chatState.chats
+        .where((c) => c.id == widget.chatId)
+        .firstOrNull;
     final msg = chatState.messages.where((m) => m.id == msgId).firstOrNull;
     if (currentChat == null || msg == null) return;
 
     final isMe = msg.senderId == authState.user?.id;
-    final isGroup = currentChat.type == 'group' || currentChat.type == 'channel';
+    final isGroup =
+        currentChat.type == 'group' || currentChat.type == 'channel';
 
     showDialog(
       context: context,
@@ -728,7 +880,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(context);
-              ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'me');
+              ref
+                  .read(chatProvider.notifier)
+                  .deleteMessage(widget.chatId, msgId, mode: 'me');
             },
             child: const Text('Delete for me'),
           ),
@@ -739,10 +893,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 if (isGroup) {
                   _confirmDeleteForAll(msgId);
                 } else {
-                  ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'all');
+                  ref
+                      .read(chatProvider.notifier)
+                      .deleteMessage(widget.chatId, msgId, mode: 'all');
                 }
               },
-              child: Text(isGroup ? 'Delete for everyone' : 'Delete for me and ${currentChat.name}'),
+              child: Text(
+                isGroup
+                    ? 'Delete for everyone'
+                    : 'Delete for me and ${currentChat.name}',
+              ),
             ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context),
@@ -758,7 +918,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete for everyone?'),
-        content: const Text('This message will be deleted for all members of this chat.'),
+        content: const Text(
+          'This message will be deleted for all members of this chat.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -767,9 +929,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              ref.read(chatProvider.notifier).deleteMessage(widget.chatId, msgId, mode: 'all');
+              ref
+                  .read(chatProvider.notifier)
+                  .deleteMessage(widget.chatId, msgId, mode: 'all');
             },
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -785,10 +951,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => ForwardMessageSheet(
-        sourceChatId: widget.chatId,
-        messageIds: [msgId],
-      ),
+      builder: (_) =>
+          ForwardMessageSheet(sourceChatId: widget.chatId, messageIds: [msgId]),
     );
   }
 
@@ -819,11 +983,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     String otherUserName = 'User';
 
     final chatState = ref.read(chatProvider);
-    final currentChat = chatState.chats.where((c) => c.id == widget.chatId).firstOrNull;
+    final currentChat = chatState.chats
+        .where((c) => c.id == widget.chatId)
+        .firstOrNull;
     if (currentChat == null) return;
 
     if (currentChat.type == 'personal') {
-      final members = await ref.read(chatRepositoryProvider).getMembers(widget.chatId);
+      final members = await ref
+          .read(chatRepositoryProvider)
+          .getMembers(widget.chatId);
       for (final m in members) {
         final uid = m['user_id'] as String? ?? '';
         if (uid != currentUserId && uid.isNotEmpty) {
@@ -851,14 +1019,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     try {
-      await webrtc.startCall(otherUserId, callType, chatId: widget.chatId, fromName: authState.user?.displayName ?? authState.user?.username ?? '');
+      await webrtc.startCall(
+        otherUserId,
+        callType,
+        chatId: widget.chatId,
+        fromName: authState.user?.displayName ?? authState.user?.username ?? '',
+      );
     } catch (e) {
       debugPrint('startCall failed: $e');
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start call: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to start call: $e')));
       }
     }
   }
@@ -868,7 +1041,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final currentUserId = authState.user?.id ?? '';
     final userName = authState.user?.username ?? 'User';
 
-    final members = await ref.read(chatRepositoryProvider).getMembers(widget.chatId);
+    final members = await ref
+        .read(chatRepositoryProvider)
+        .getMembers(widget.chatId);
     final participantIds = <String>[];
     for (final m in members) {
       final uid = m['user_id'] as String? ?? '';
@@ -883,7 +1058,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     webrtc.init();
 
     final chatState = ref.read(chatProvider);
-    final currentChat = chatState.chats.where((c) => c.id == widget.chatId).firstOrNull;
+    final currentChat = chatState.chats
+        .where((c) => c.id == widget.chatId)
+        .firstOrNull;
     if (currentChat == null) return;
 
     if (!mounted) return;

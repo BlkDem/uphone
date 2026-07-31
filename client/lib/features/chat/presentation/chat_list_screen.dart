@@ -42,14 +42,16 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               Icon(
                 Icons.forum_outlined,
                 size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 'Select a chat',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -67,10 +69,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               tooltip: 'Contacts',
               onPressed: () => context.go('/contacts'),
             ),
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {},
-          ),
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
@@ -122,65 +121,67 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         child: chatState.isLoadingChats
             ? const Center(child: CircularProgressIndicator())
             : chatState.chats.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 64,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No chats yet',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No chats yet',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Start a conversation',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Start a conversation',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: chatState.chats.length,
-                  itemBuilder: (context, index) {
-                    final chat = chatState.chats[index];
-                    return ChatTile(
-                      chat: chat,
-                      currentUserId: authState.user?.id ?? '',
-                      contacts: contactsState.contacts,
-                      onTap: () {
-                        context.go('/chats/${chat.id}');
-                      },
-                    );
-                  },
+                    ),
+                  ],
                 ),
+              )
+            : ListView.builder(
+                itemCount: chatState.chats.length,
+                itemBuilder: (context, index) {
+                  final chat = chatState.chats[index];
+                  return ChatTile(
+                    chat: chat,
+                    currentUserId: authState.user?.id ?? '',
+                    contacts: contactsState.contacts,
+                    onTap: () {
+                      context.go('/chats/${chat.id}');
+                    },
+                  );
+                },
+              ),
       ),
       floatingActionButton: kIsWeb
           ? null
           : Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'group',
-            onPressed: () => context.push('/chats/create'),
-            child: const Icon(Icons.group_add),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'chat',
-            onPressed: () => _showNewChatDialog(context),
-            child: const Icon(Icons.chat),
-          ),
-        ],
-      ),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'group',
+                  onPressed: () => context.push('/chats/create'),
+                  child: const Icon(Icons.group_add),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'chat',
+                  onPressed: () => _showNewChatDialog(context),
+                  child: const Icon(Icons.chat),
+                ),
+              ],
+            ),
     );
   }
 
@@ -193,9 +194,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         title: const Text('New Chat'),
         content: TextField(
           controller: emailController,
-          decoration: const InputDecoration(
-            labelText: 'User email',
-          ),
+          decoration: const InputDecoration(labelText: 'User email'),
         ),
         actions: [
           TextButton(
@@ -236,7 +235,7 @@ class ChatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final lastMessage = chat.lastMessage;
     final timeStr = lastMessage != null
-        ? DateFormat('HH:mm').format(lastMessage.createdAt)
+        ? DateFormat('HH:mm').format(lastMessage.createdAt.toLocal())
         : '';
     final unreadCount = chat.unreadCount ?? 0;
 
@@ -267,9 +266,7 @@ class ChatTile extends StatelessWidget {
             : null,
         child: (displayAvatar == null || displayAvatar.isEmpty)
             ? Text(
-                chat.name.isNotEmpty
-                    ? chat.name[0].toUpperCase()
-                    : '?',
+                chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.bold,
@@ -288,9 +285,7 @@ class ChatTile extends StatelessWidget {
       ),
       subtitle: lastMessage != null
           ? Text(
-              lastMessage.isDeleted
-                  ? 'Message deleted'
-                  : lastMessage.content,
+              lastMessage.isDeleted ? 'Message deleted' : lastMessage.content,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -320,13 +315,13 @@ class ChatTile extends StatelessWidget {
               ),
             )
           : lastMessage != null
-              ? Text(
-                  timeStr,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                )
-              : null,
+          ? Text(
+              timeStr,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          : null,
     );
   }
 }
