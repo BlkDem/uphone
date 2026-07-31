@@ -25,6 +25,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
   StreamSubscription<CallEvent>? _sub;
   StreamSubscription<NotificationAction>? _notifSub;
   bool _isShowingIncomingCall = false;
+  final Set<String> _endedCallIds = {};
   String? _pendingCallId;
   String? _pendingRemoteUserId;
   String? _pendingRemoteUserName;
@@ -105,6 +106,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
           _clearPending();
         }
       } else if (event is CallEndedEvent || event is CallRejectedEvent) {
+        if (event.callId.isNotEmpty) _endedCallIds.add(event.callId);
         if (_isShowingIncomingCall && event.callId == _pendingCallId) {
           _closeIncomingCallScreen();
         }
@@ -149,6 +151,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
     if (navigator == null) return;
     if (_isShowingIncomingCall) return;
 
+    _endedCallIds.clear();
     _pendingCallId = action.callId;
     _pendingRemoteUserId = action.fromUserId;
     _pendingRemoteUserName = action.fromName ?? 'Unknown';
@@ -172,6 +175,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
   }
 
   Future<void> _acceptFromNotification(NotificationAction action) async {
+    if (_endedCallIds.contains(action.callId)) return;
     NotificationService.cancelCallNotification(callId: action.callId);
     await _ensureWsConnected();
     if (!mounted) return;
@@ -200,6 +204,7 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
   }
 
   Future<void> _showIncomingCallScreen(IncomingCallEvent event) async {
+    _endedCallIds.clear();
     if (await _showCallNotificationIfWindowHidden(event)) {
       _pendingCallId = event.callId;
       _pendingRemoteUserId = event.fromUserId;

@@ -761,11 +761,18 @@ func (r *Repository) ForwardMessage(ctx context.Context, targetChatID string, ms
 	return nil
 }
 
-func (r *Repository) SaveCallLog(ctx context.Context, callID, chatID, callerID, calleeID, callType, status string, startedAt time.Time) error {
+func (r *Repository) SaveCallLog(ctx context.Context, callID, chatID, callerID, calleeID, callType, status string, startedAt, answeredAt, endedAt time.Time) error {
+	var ans, end interface{}
+	if !answeredAt.IsZero() {
+		ans = answeredAt
+	}
+	if !endedAt.IsZero() {
+		end = endedAt
+	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO call_logs (id, call_id, chat_id, caller_id, callee_id, call_type, status, started_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		uuid.New().String(), callID, chatID, callerID, calleeID, callType, status, startedAt, time.Now().UTC())
+		`INSERT INTO call_logs (id, call_id, chat_id, caller_id, callee_id, call_type, status, started_at, answered_at, ended_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		uuid.New().String(), callID, chatID, callerID, calleeID, callType, status, startedAt, ans, end, time.Now().UTC())
 	return err
 }
 

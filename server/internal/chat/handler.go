@@ -3,8 +3,10 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/uphone/server/internal/fcm"
@@ -34,6 +36,10 @@ func NewHandler(repo *Repository, hub *Hub, signalHub *webrtc.SignalHub, fcm *fc
 
 	signalHub.OnMissedCall = func(info *webrtc.MissedCallInfo) {
 		h.handleMissedCall(info)
+	}
+
+	signalHub.OnCallEnded = func(info *webrtc.CallEndedInfo) {
+		h.handleCallEnded(info)
 	}
 
 	return h
@@ -297,5 +303,67 @@ func (h *Handler) handleMissedCall(info *webrtc.MissedCallInfo) {
 		})
 	}
 
-	_ = h.repo.SaveCallLog(ctx, info.CallID, info.ChatID, info.CallerID, "", info.CallType, "missed", info.StartedAt)
+	_ = h.repo.SaveCallLog(ctx, info.CallID, info.ChatID, info.CallerID, "", info.CallType, "missed", info.StartedAt, time.Time{}, time.Time{})
+}
+
+func (h *Handler) handleCallEnded(info *webrtc.CallEndedInfo) {
+	ctx := context.Background()
+
+	callerName := info.CallerName
+	if callerName == "" {
+		if sender, err := h.repo.getSenderInfo(ctx, info.CallerID); err == nil {
+			callerName = sender.DisplayName
+			if callerName == "" {
+				callerName = sender.Username
+			}
+		} else {
+			callerName = "Кто-то"
+		}
+	}
+
+	callTypeLabel := "Звонок"
+	if info.CallType == "video" {
+		callTypeLabel = "Видеозвонок"
+	}
+
+	content := callTypeLabel + " от " + callerName
+	if !info.AnsweredAt.IsZero() && info.EndedAt.After(info.AnsweredAt) {
+		content += " · " + formatDuration(info.EndedAt.Sub(info.AnsweredAt))
+	}
+
+	sysMsg, err := h.repo.SendSystemMessage(ctx, info.ChatID, content)
+	if err != nil {
+		log.Printf("call ended system message error: %v", err)
+		return
+	}
+
+	sysMsg.Status = "delivered"
+
+	members, err := h.repo.GetMembers(ctx, info.ChatID)
+	if err == nil {
+		userIDs := make([]string, len(members))
+		for i, m := range members {
+			userIDs[i] = m.UserID
+		}
+		h.hub.BroadcastToUsers(userIDs, &Envelope{
+			Type:    "message.new",
+			Payload: sysMsg,
+		})
+	}
+
+	_ = h.repo.SaveCallLog(ctx, info.CallID, info.ChatID, info.CallerID, info.CalleeID, info.CallType, "completed", info.StartedAt, info.AnsweredAt, info.EndedAt)
+}
+
+func formatDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	d = d.Round(time.Second)
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+	if hours > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
+	}
+	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
