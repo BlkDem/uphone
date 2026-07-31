@@ -1,26 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uphone_client/core/theme/chat_palette.dart';
 
 class AppTheme {
-  static const _seedColor = Color(0xFF6750A4);
-
-  static ThemeData light() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.light,
-    );
-    return _buildTheme(colorScheme);
+  static ThemeData light({ChatPalette? palette}) {
+    final colorScheme = _scheme(Brightness.light, palette);
+    return _buildTheme(colorScheme, palette);
   }
 
-  static ThemeData dark() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.dark,
-    );
-    return _buildTheme(colorScheme);
+  static ThemeData dark({ChatPalette? palette}) {
+    final colorScheme = _scheme(Brightness.dark, palette);
+    return _buildTheme(colorScheme, palette);
   }
 
-  static ThemeData _buildTheme(ColorScheme colorScheme) {
+  static ColorScheme _scheme(Brightness brightness, ChatPalette? palette) {
+    final p = palette ?? ChatPalettes.standard;
+    return ColorScheme.fromSeed(
+      seedColor: p.seedColor,
+      brightness: brightness,
+    ).copyWith(
+      surface: p.background,
+      primaryContainer: p.ownBubble,
+      onPrimaryContainer: p.ownText,
+      surfaceContainerHighest: p.otherBubble,
+      onSurface: p.otherText,
+    );
+  }
+
+  static ThemeData _buildTheme(ColorScheme colorScheme, ChatPalette? palette) {
+    final p = palette ?? ChatPalettes.standard;
     final textTheme = GoogleFonts.interTextTheme(
       ThemeData(colorScheme: colorScheme).textTheme,
     );
@@ -28,6 +36,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      scaffoldBackgroundColor: p.background,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
         centerTitle: false,
@@ -73,6 +82,12 @@ class AppTheme {
         ),
         color: colorScheme.surface,
       ),
+      extensions: [
+        ChatPaletteTheme(
+          quoteBackground: p.quoteBackground,
+          readTick: p.readTick,
+        ),
+      ],
     );
   }
 }

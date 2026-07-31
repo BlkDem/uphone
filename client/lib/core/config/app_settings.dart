@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uphone_client/core/theme/chat_palette.dart';
 
 class AppSettings {
   static AppSettings? _instance;
@@ -49,4 +50,37 @@ class AppSettings {
 
   double get chatFontSize => _prefs.getDouble('chat_font_size') ?? 14.0;
   set chatFontSize(double value) => _prefs.setDouble('chat_font_size', value);
+
+  ChatPalette get chatPalette {
+    final id = _prefs.getString('chat_palette_id') ?? 'standard';
+    if (id == 'custom') {
+      final colors = <String, int>{};
+      for (final key in [
+        'seed',
+        'background',
+        'own_bubble',
+        'other_bubble',
+        'own_text',
+        'other_text',
+        'quote_background',
+        'read_tick',
+      ]) {
+        final v = _prefs.getInt('chat_custom_$key');
+        if (v != null) colors[key] = v;
+      }
+      if (colors.isNotEmpty) {
+        return ChatPalette.fromColorMap(colors);
+      }
+    }
+    return ChatPalettes.byId(id) ?? ChatPalettes.standard;
+  }
+
+  set chatPalette(ChatPalette palette) {
+    _prefs.setString('chat_palette_id', palette.id);
+    if (palette.id == 'custom') {
+      palette.colorMap.forEach((key, value) {
+        _prefs.setInt('chat_custom_$key', value);
+      });
+    }
+  }
 }

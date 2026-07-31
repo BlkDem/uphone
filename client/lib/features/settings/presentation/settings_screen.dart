@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uphone_client/core/config/app_settings.dart';
 import 'package:uphone_client/core/network/battery_optimization.dart';
+import 'package:uphone_client/core/theme/chat_palette.dart';
 import 'package:uphone_client/main.dart';
+import 'package:uphone_client/features/settings/presentation/palette_settings_screen.dart';
 import 'package:uphone_client/features/settings/presentation/profile_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -30,6 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeMode = ref.watch(themeModeProvider);
+    final currentPalette = ref.watch(chatPaletteProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -121,6 +124,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const Divider(),
+          _SectionHeader(title: 'Chat Palette', theme: theme),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final palette in ChatPalettes.all)
+                  _PaletteSwatch(
+                    palette: palette,
+                    selected: currentPalette.id == palette.id,
+                    onTap: () {
+                      AppSettings.instance.chatPalette = palette;
+                      ref.read(chatPaletteProvider.notifier).state = palette;
+                    },
+                  ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('Customize colors'),
+            subtitle: const Text('Edit each chat color individually'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PaletteSettingsScreen()),
+            ),
+          ),
+          const Divider(),
           _SectionHeader(title: 'Media Gallery', theme: theme),
           SwitchListTile(
             title: const Text('Auto-play slideshow'),
@@ -208,6 +240,72 @@ class _SectionHeader extends StatelessWidget {
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+}
+
+class _PaletteSwatch extends StatelessWidget {
+  final ChatPalette palette;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PaletteSwatch({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: palette.ownBubble,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? palette.seedColor : Colors.black12,
+                width: selected ? 3 : 1.5,
+              ),
+            ),
+            child: Center(
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: palette.seedColor,
+                  shape: BoxShape.circle,
+                ),
+                child: selected
+                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                    : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 64,
+            child: Text(
+              palette.name,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelSmall?.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
