@@ -357,7 +357,7 @@ func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, lim
 	}
 
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, COALESCE(m.content,''), m.type,
+		`SELECT m.id, m.chat_id, COALESCE(m.sender_id,''), COALESCE(m.content,''), m.type,
 		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
 		        m.created_at, m.updated_at,
 		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,''),
@@ -437,7 +437,7 @@ func (r *Repository) GetMessageByID(ctx context.Context, msgID string) (*Message
 	var replyTo sql.NullString
 
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, chat_id, sender_id, COALESCE(content,''), type,
+		`SELECT id, chat_id, COALESCE(sender_id,''), COALESCE(content,''), type,
 		        COALESCE(file_url,''), reply_to, is_pinned, is_deleted, created_at, updated_at
 		 FROM messages WHERE id = ?`, msgID).Scan(
 		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
@@ -610,7 +610,7 @@ func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, userID
 		limit = 50
 	}
 
-	query := `SELECT m.id, m.chat_id, m.sender_id, COALESCE(m.content,''), m.type,
+	query := `SELECT m.id, m.chat_id, COALESCE(m.sender_id,''), COALESCE(m.content,''), m.type,
 		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
 		        m.created_at, m.updated_at,
 		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
