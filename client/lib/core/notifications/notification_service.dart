@@ -52,7 +52,9 @@ class NotificationService {
   Future<void> initialize() async {
     try {
       // Initialize local notifications (Android)
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const initSettings = InitializationSettings(android: androidSettings);
       await _localNotifications.initialize(
         initSettings,
@@ -61,9 +63,10 @@ class NotificationService {
 
       // Android-specific: create notification channels
       if (Platform.isAndroid) {
-        final androidPlugin =
-            _localNotifications.resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>();
+        final androidPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         if (androidPlugin != null) {
           await androidPlugin.createNotificationChannel(
             const AndroidNotificationChannel(
@@ -90,7 +93,9 @@ class NotificationService {
       if (Platform.isAndroid) {
         try {
           _fcm = FirebaseMessaging.instance;
-          FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+          FirebaseMessaging.onBackgroundMessage(
+            _firebaseMessagingBackgroundHandler,
+          );
           final settings = await _fcm!.requestPermission(
             alert: true,
             badge: true,
@@ -131,10 +136,40 @@ class NotificationService {
         }
       }
 
-      debugPrint('NotificationService initialized (Android: ${Platform.isAndroid}, Windows: ${Platform.isWindows})');
+      debugPrint(
+        'NotificationService initialized (Android: ${Platform.isAndroid}, Windows: ${Platform.isWindows})',
+      );
+
+      // Windows: route toast activation clicks (Accept/Reject/Show) into the app
+      if (Platform.isWindows) {
+        WindowsTrayService.instance.toastActivations.listen((argument) {
+          final action = parseCallActionPayload(argument);
+          if (action != null) {
+            _actionController.add(action);
+          }
+        });
+      }
     } catch (e) {
       debugPrint('NotificationService initialize failed: $e');
     }
+  }
+
+  static NotificationAction? parseCallActionPayload(String payload) {
+    if (payload.isEmpty) return null;
+    final parts = payload.split(':');
+    if (parts.length < 6) return null;
+    final action = parts[0].toUpperCase();
+    if (action != 'ACCEPT' && action != 'REJECT' && action != 'SHOW') {
+      return null;
+    }
+    return NotificationAction(
+      action: action,
+      callId: parts[1],
+      fromUserId: parts[2],
+      fromName: parts[3],
+      callType: parts[4],
+      isGroup: parts[5] == 'true',
+    );
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
@@ -148,14 +183,16 @@ class NotificationService {
       final callType = data['call_type'] ?? 'video';
       final isGroup = type == 'call-invite';
 
-      _actionController.add(NotificationAction(
-        action: 'SHOW',
-        callId: callId,
-        fromUserId: fromUserId,
-        fromName: fromName,
-        callType: callType,
-        isGroup: isGroup,
-      ));
+      _actionController.add(
+        NotificationAction(
+          action: 'SHOW',
+          callId: callId,
+          fromUserId: fromUserId,
+          fromName: fromName,
+          callType: callType,
+          isGroup: isGroup,
+        ),
+      );
     } else if (type == 'missed_call') {
       final callId = data['call_id'] ?? '';
       final callerId = data['caller_id'] ?? '';
@@ -165,14 +202,16 @@ class NotificationService {
       final title = data['title'] ?? 'Пропущенный звонок';
       final body = data['body'] ?? '$callerName пытался(-ась) дозвониться';
 
-      _actionController.add(NotificationAction(
-        action: 'MISSED_CALL',
-        callId: callId,
-        fromUserId: callerId,
-        fromName: callerName,
-        callType: callType,
-        chatId: chatId,
-      ));
+      _actionController.add(
+        NotificationAction(
+          action: 'MISSED_CALL',
+          callId: callId,
+          fromUserId: callerId,
+          fromName: callerName,
+          callType: callType,
+          chatId: chatId,
+        ),
+      );
 
       _showMissedCallNotification(title, body);
     } else {
@@ -194,14 +233,16 @@ class NotificationService {
       final callType = data['call_type'] ?? 'video';
       final isGroup = type == 'call-invite';
 
-      _actionController.add(NotificationAction(
-        action: 'SHOW',
-        callId: callId,
-        fromUserId: fromUserId,
-        fromName: fromName,
-        callType: callType,
-        isGroup: isGroup,
-      ));
+      _actionController.add(
+        NotificationAction(
+          action: 'SHOW',
+          callId: callId,
+          fromUserId: fromUserId,
+          fromName: fromName,
+          callType: callType,
+          isGroup: isGroup,
+        ),
+      );
     } else if (type == 'missed_call') {
       final callId = data['call_id'] ?? '';
       final callerId = data['caller_id'] ?? '';
@@ -209,14 +250,16 @@ class NotificationService {
       final callType = data['call_type'] ?? 'video';
       final chatId = data['chat_id'] ?? '';
 
-      _actionController.add(NotificationAction(
-        action: 'MISSED_CALL',
-        callId: callId,
-        fromUserId: callerId,
-        fromName: callerName,
-        callType: callType,
-        chatId: chatId,
-      ));
+      _actionController.add(
+        NotificationAction(
+          action: 'MISSED_CALL',
+          callId: callId,
+          fromUserId: callerId,
+          fromName: callerName,
+          callType: callType,
+          chatId: chatId,
+        ),
+      );
     }
   }
 
@@ -256,8 +299,19 @@ class NotificationService {
   }
 
   static Future<void> cancelCallNotification({String? callId}) async {
+    if (Platform.isWindows) {
+      if (callId != null && callId.isNotEmpty) {
+        final tray = WindowsTrayService.instance;
+        if (tray.isInitialized) {
+          await tray.dismissCallNotification(callId);
+        }
+      }
+      return;
+    }
     try {
-      await _callChannel.invokeMethod('cancelCallNotification', {'callId': callId});
+      await _callChannel.invokeMethod('cancelCallNotification', {
+        'callId': callId,
+      });
     } catch (_) {}
   }
 
@@ -281,14 +335,16 @@ class NotificationService {
       } else {
         action = 'SHOW';
       }
-      _actionController.add(NotificationAction(
-        action: action,
-        callId: parts[1],
-        fromUserId: parts[2],
-        fromName: parts[3],
-        callType: parts[4],
-        isGroup: parts[5] == 'true',
-      ));
+      _actionController.add(
+        NotificationAction(
+          action: action,
+          callId: parts[1],
+          fromUserId: parts[2],
+          fromName: parts[3],
+          callType: parts[4],
+          isGroup: parts[5] == 'true',
+        ),
+      );
     }
   }
 
@@ -352,13 +408,15 @@ class NotificationService {
     if (_accessToken == null || _userId == null) return;
 
     try {
-      final dio = Dio(BaseOptions(
-        baseUrl: ServerConfig.instance.apiBaseUrl,
-        headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Content-Type': 'application/json',
-        },
-      ));
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: ServerConfig.instance.apiBaseUrl,
+          headers: {
+            'Authorization': 'Bearer $_accessToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
       await dio.post('/api/v1/users/fcm-token', data: {'token': token});
       debugPrint('FCM token registered with server');
     } catch (e) {
