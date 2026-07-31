@@ -175,6 +175,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _scrollToTargetWeb(int targetIndex) {
     if (_scrollRetries > 20) {
+      _initialScrollDone = true;
       debugPrint('SCROLL web: giving up after 20 retries');
       return;
     }
@@ -253,6 +254,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     debugPrint('SCROLL native: jumpTo index=$targetIndex');
     _itemScrollController.jumpTo(index: targetIndex);
+    _initialScrollDone = true;
   }
 
   void _scrollToBottom() {
