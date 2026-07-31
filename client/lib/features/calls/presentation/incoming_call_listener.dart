@@ -1,9 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uphone_client/core/network/ws_client.dart';
 import 'package:uphone_client/core/notifications/notification_service.dart';
+import 'package:uphone_client/core/platform/windows_tray_service.dart';
 import 'package:uphone_client/core/router/app_router.dart';
 import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
@@ -20,8 +21,7 @@ class IncomingCallListener extends ConsumerStatefulWidget {
       _IncomingCallListenerState();
 }
 
-class _IncomingCallListenerState
-    extends ConsumerState<IncomingCallListener> {
+class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
   StreamSubscription<CallEvent>? _sub;
   StreamSubscription<NotificationAction>? _notifSub;
   bool _isShowingIncomingCall = false;
@@ -38,12 +38,28 @@ class _IncomingCallListenerState
       _listen();
       _listenNotifications();
       _checkPendingNativeIntent();
+      _checkPendingWindowsActivation();
     });
   }
 
+  void _checkPendingWindowsActivation() {
+    if (!Platform.isWindows) return;
+    final argument = WindowsTrayService.instance.consumePendingActivation();
+    if (argument == null || argument.isEmpty) return;
+    final action = NotificationService.parseCallActionPayload(argument);
+    if (action == null) return;
+    if (action.action == 'SHOW') {
+      _showIncomingCallFromNotification(action);
+    } else if (action.action == 'ACCEPT') {
+      _acceptFromNotification(action);
+    } else if (action.action == 'REJECT') {
+      _rejectFromNotification(action);
+    }
+  }
+
   void _checkPendingNativeIntent() {
-    final pending =
-        NotificationService.instance.consumePendingNativeCallIntent();
+    final pending = NotificationService.instance
+        .consumePendingNativeCallIntent();
     if (pending != null && pending.callId.isNotEmpty) {
       if (pending.action == 'SHOW') {
         _showIncomingCallFromNotification(pending);
@@ -127,6 +143,7 @@ class _IncomingCallListenerState
   }
 
   void _showIncomingCallFromNotification(NotificationAction action) {
+    _restoreWindowIfNeeded();
     final navKey = ref.read(navigatorKeyProvider);
     final navigator = navKey.currentState;
     if (navigator == null) return;
@@ -158,6 +175,7 @@ class _IncomingCallListenerState
     NotificationService.cancelCallNotification(callId: action.callId);
     await _ensureWsConnected();
     if (!mounted) return;
+    _restoreWindowIfNeeded();
     _isShowingIncomingCall = false;
     _pendingCallId = action.callId;
     _pendingRemoteUserId = action.fromUserId;
@@ -181,7 +199,16 @@ class _IncomingCallListenerState
     webrtc.rejectCall(action.callId, action.fromUserId);
   }
 
-  void _showIncomingCallScreen(IncomingCallEvent event) {
+  Future<void> _showIncomingCallScreen(IncomingCallEvent event) async {
+    if (await _showCallNotificationIfWindowHidden(event)) {
+      _pendingCallId = event.callId;
+      _pendingRemoteUserId = event.fromUserId;
+      _pendingRemoteUserName = event.fromName;
+      _pendingCallType = event.callType;
+      _pendingIsGroup = event.isGroup;
+      return;
+    }
+
     final navKey = ref.read(navigatorKeyProvider);
     final navigator = navKey.currentState;
     if (navigator == null) return;
@@ -208,6 +235,69 @@ class _IncomingCallListenerState
     navigator.push<void>(route).then((_) {
       _isShowingIncomingCall = false;
     });
+  }
+
+  Future<bool> _showCallNotificationIfWindowHidden(
+    IncomingCallEvent event,
+  ) async {
+    if (!Platform.isWindows) return false;
+    final tray = WindowsTrayService.instance;
+    if (!tray.isInitialized) return false;
+    try {
+      if (!await tray.isWindowHiddenOrMinimized()) return false;
+      await tray.showIncomingCallNotification(
+        title: event.fromName.isNotEmpty ? event.fromName : 'Входящий звонок',
+        body: 'Входящий звонок',
+        launchArgument: _buildCallArg(
+          'SHOW',
+          callId: event.callId,
+          fromUserId: event.fromUserId,
+          fromName: event.fromName,
+          callType: event.callType,
+          isGroup: event.isGroup,
+        ),
+        acceptArgument: _buildCallArg(
+          'ACCEPT',
+          callId: event.callId,
+          fromUserId: event.fromUserId,
+          fromName: event.fromName,
+          callType: event.callType,
+          isGroup: event.isGroup,
+        ),
+        declineArgument: _buildCallArg(
+          'REJECT',
+          callId: event.callId,
+          fromUserId: event.fromUserId,
+          fromName: event.fromName,
+          callType: event.callType,
+          isGroup: event.isGroup,
+        ),
+        callId: event.callId,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Failed to show Windows call notification: $e');
+      return false;
+    }
+  }
+
+  String _buildCallArg(
+    String action, {
+    required String callId,
+    required String fromUserId,
+    required String fromName,
+    required String callType,
+    required bool isGroup,
+  }) {
+    return '$action:$callId:$fromUserId:$fromName:$callType:$isGroup';
+  }
+
+  void _restoreWindowIfNeeded() {
+    if (!Platform.isWindows) return;
+    final tray = WindowsTrayService.instance;
+    if (tray.isInitialized) {
+      tray.showWindow();
+    }
   }
 
   void _closeIncomingCallScreen() {

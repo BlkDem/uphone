@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,10 +12,20 @@ class WindowsTrayService {
   WindowsTrayService._();
 
   final SystemTray _tray = SystemTray();
-  final AppWindow _appWindow = AppWindow();
   final WindowManager _windowManager = WindowManager.instance;
   bool _isInitialized = false;
   bool _isQuitting = false;
+
+  final StreamController<String> _activationController =
+      StreamController<String>.broadcast();
+  Stream<String> get toastActivations => _activationController.stream;
+  String? _pendingActivation;
+
+  String? consumePendingActivation() {
+    final value = _pendingActivation;
+    _pendingActivation = null;
+    return value;
+  }
 
   // GUID for the notification activator class
   static const _clsid = '2EB1AE51-98B7-4C2B-B1A0-000000000001';
@@ -48,26 +59,17 @@ class WindowsTrayService {
       );
 
       final menu = [
-        MenuItem(
-          label: 'Show',
-          onClicked: _showWindow,
-        ),
-        MenuItem(
-          label: 'Hide',
-          onClicked: _hideWindow,
-        ),
+        MenuItem(label: 'Show', onClicked: showWindow),
+        MenuItem(label: 'Hide', onClicked: _hideWindow),
         MenuSeparator(),
-        MenuItem(
-          label: 'Quit',
-          onClicked: _quit,
-        ),
+        MenuItem(label: 'Quit', onClicked: _quit),
       ];
 
       await _tray.setContextMenu(menu);
 
       _tray.registerSystemTrayEventHandler((eventName) {
         if (eventName == 'leftMouseUp' || eventName == 'leftMouseDblClk') {
-          _showWindow();
+          showWindow();
         } else if (eventName == 'rightMouseUp') {
           _tray.popUpContextMenu();
         }
@@ -84,6 +86,13 @@ class WindowsTrayService {
           iconPath: iconPath,
           clsid: _clsid,
         );
+        toast.setActivatedCallback((event) {
+          debugPrint('WinToast activated: ${event.argument}');
+          if (event.argument.isNotEmpty) {
+            _pendingActivation = event.argument;
+            _activationController.add(event.argument);
+          }
+        });
         debugPrint('WinToast initialized');
       } catch (e) {
         debugPrint('WinToast init failed: $e');
@@ -105,13 +114,87 @@ class WindowsTrayService {
     await _windowManager.hide();
   }
 
-  void _showWindow() {
-    _appWindow.show();
-    _windowManager.focus();
+  Future<void> showWindow() async {
+    try {
+      await _windowManager.show();
+      await _windowManager.focus();
+    } catch (e) {
+      debugPrint('showWindow failed: $e');
+    }
+  }
+
+  Future<bool> isWindowHiddenOrMinimized() async {
+    try {
+      final minimized = await _windowManager.isMinimized();
+      final visible = await _windowManager.isVisible();
+      return minimized || !visible;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _hideWindow() {
     _windowManager.hide();
+  }
+
+  Future<void> showIncomingCallNotification({
+    required String title,
+    required String body,
+    required String launchArgument,
+    required String acceptArgument,
+    required String declineArgument,
+    required String callId,
+  }) async {
+    try {
+      final toast = WinToast.instance();
+      await toast.showToast(
+        tag: 'call_$callId',
+        group: 'calls',
+        toast: Toast(
+          launch: launchArgument,
+          duration: ToastDuration.long,
+          scenario: ToastScenario.incomingCall,
+          useButtonStyle: true,
+          children: [
+            ToastChildVisual(
+              binding: ToastVisualBinding(
+                children: [
+                  ToastVisualBindingChildText(text: title, id: 1),
+                  ToastVisualBindingChildText(text: body, id: 2),
+                ],
+              ),
+            ),
+            ToastChildActions(
+              children: [
+                ToastAction(
+                  content: 'Отклонить',
+                  arguments: declineArgument,
+                  activationType: ToastActionActivationType.foreground,
+                  hintButtonStyle: ToastActionHintButtonStyle.critical,
+                ),
+                ToastAction(
+                  content: 'Принять',
+                  arguments: acceptArgument,
+                  activationType: ToastActionActivationType.foreground,
+                  hintButtonStyle: ToastActionHintButtonStyle.success,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('WinToast call notification failed: $e');
+    }
+  }
+
+  Future<void> dismissCallNotification(String callId) async {
+    try {
+      final toast = WinToast.instance();
+      await toast.dismiss(tag: 'call_$callId', group: 'calls');
+    } catch (e) {
+      debugPrint('WinToast dismiss failed: $e');
+    }
   }
 
   Future<void> showNotification(String title, String body) async {
