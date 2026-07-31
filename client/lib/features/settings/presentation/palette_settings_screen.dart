@@ -53,7 +53,10 @@ class _PaletteSettingsScreenState extends ConsumerState<PaletteSettingsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: _PalettePreview(palette: _palette),
+            child: _PalettePreview(
+              palette: _palette,
+              authorColor: _palette.authorColor,
+            ),
           ),
           _ColorField(
             label: 'Accent color',
@@ -94,6 +97,11 @@ class _PaletteSettingsScreenState extends ConsumerState<PaletteSettingsScreen> {
             label: 'Read ticks',
             color: _palette.readTick,
             onPicked: (c) => _save(_palette.copyWith(readTick: c)),
+          ),
+          _ColorField(
+            label: 'Author name color',
+            color: _palette.authorColor,
+            onPicked: (c) => _save(_palette.copyWith(authorColor: c)),
           ),
           const SizedBox(height: 24),
         ],
@@ -248,8 +256,9 @@ class _ColorField extends StatelessWidget {
 
 class _PalettePreview extends StatelessWidget {
   final ChatPalette palette;
+  final Color authorColor;
 
-  const _PalettePreview({required this.palette});
+  const _PalettePreview({required this.palette, required this.authorColor});
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +323,7 @@ class _PalettePreview extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: palette.seedColor,
+                  color: authorColor,
                 ),
               ),
             if (quote != null)

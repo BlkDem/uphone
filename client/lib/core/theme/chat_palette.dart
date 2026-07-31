@@ -11,6 +11,7 @@ class ChatPalette {
   final Color otherText;
   final Color quoteBackground;
   final Color readTick;
+  final Color authorColor;
 
   const ChatPalette({
     required this.id,
@@ -23,6 +24,7 @@ class ChatPalette {
     required this.otherText,
     required this.quoteBackground,
     required this.readTick,
+    required this.authorColor,
   });
 
   ChatPalette copyWith({
@@ -36,6 +38,7 @@ class ChatPalette {
     Color? otherText,
     Color? quoteBackground,
     Color? readTick,
+    Color? authorColor,
   }) {
     return ChatPalette(
       id: id ?? this.id,
@@ -48,6 +51,7 @@ class ChatPalette {
       otherText: otherText ?? this.otherText,
       quoteBackground: quoteBackground ?? this.quoteBackground,
       readTick: readTick ?? this.readTick,
+      authorColor: authorColor ?? this.authorColor,
     );
   }
 
@@ -62,6 +66,7 @@ class ChatPalette {
         'other_text': otherText.toARGB32(),
         'quote_background': quoteBackground.toARGB32(),
         'read_tick': readTick.toARGB32(),
+        'author_color': authorColor.toARGB32(),
       };
 
   static ChatPalette fromColorMap(Map<String, int> colors) {
@@ -76,6 +81,7 @@ class ChatPalette {
       otherText: Color(colors['other_text'] ?? ChatPalettes.standard.otherText.toARGB32()),
       quoteBackground: Color(colors['quote_background'] ?? ChatPalettes.standard.quoteBackground.toARGB32()),
       readTick: Color(colors['read_tick'] ?? ChatPalettes.standard.readTick.toARGB32()),
+      authorColor: Color(colors['author_color'] ?? ChatPalettes.standard.authorColor.toARGB32()),
     );
   }
 }
@@ -83,17 +89,20 @@ class ChatPalette {
 class ChatPaletteTheme extends ThemeExtension<ChatPaletteTheme> {
   final Color quoteBackground;
   final Color readTick;
+  final Color authorColor;
 
   const ChatPaletteTheme({
     required this.quoteBackground,
     required this.readTick,
+    required this.authorColor,
   });
 
   @override
-  ChatPaletteTheme copyWith({Color? quoteBackground, Color? readTick}) {
+  ChatPaletteTheme copyWith({Color? quoteBackground, Color? readTick, Color? authorColor}) {
     return ChatPaletteTheme(
       quoteBackground: quoteBackground ?? this.quoteBackground,
       readTick: readTick ?? this.readTick,
+      authorColor: authorColor ?? this.authorColor,
     );
   }
 
@@ -103,6 +112,7 @@ class ChatPaletteTheme extends ThemeExtension<ChatPaletteTheme> {
     return ChatPaletteTheme(
       quoteBackground: Color.lerp(quoteBackground, other.quoteBackground, t)!,
       readTick: Color.lerp(readTick, other.readTick, t)!,
+      authorColor: Color.lerp(authorColor, other.authorColor, t)!,
     );
   }
 }
@@ -119,6 +129,7 @@ class ChatPalettes {
     otherText: Color(0xFF1D1B20),
     quoteBackground: Color(0xFFDDD6E8),
     readTick: Color(0xFF6750A4),
+    authorColor: Color(0xFF5E35B1),
   );
 
   static const telegram = ChatPalette(
@@ -132,6 +143,7 @@ class ChatPalettes {
     otherText: Color(0xFF0F0F0F),
     quoteBackground: Color(0xFFE3E9F0),
     readTick: Color(0xFF4EA7FF),
+    authorColor: Color(0xFF3390EC),
   );
 
   static const whatsapp = ChatPalette(
@@ -145,6 +157,7 @@ class ChatPalettes {
     otherText: Color(0xFF111B21),
     quoteBackground: Color(0xFFEFE8DE),
     readTick: Color(0xFF34B7F1),
+    authorColor: Color(0xFF008069),
   );
 
   static const ocean = ChatPalette(
@@ -158,6 +171,7 @@ class ChatPalettes {
     otherText: Color(0xFF0D1B3E),
     quoteBackground: Color(0xFFB0D0F2),
     readTick: Color(0xFF1565C0),
+    authorColor: Color(0xFF0D47A1),
   );
 
   static const coral = ChatPalette(
@@ -171,6 +185,7 @@ class ChatPalettes {
     otherText: Color(0xFF3E2723),
     quoteBackground: Color(0xFFF0BBA8),
     readTick: Color(0xFFE64A19),
+    authorColor: Color(0xFFD84315),
   );
 
   static const berry = ChatPalette(
@@ -184,6 +199,7 @@ class ChatPalettes {
     otherText: Color(0xFF3F0020),
     quoteBackground: Color(0xFFEEC7D4),
     readTick: Color(0xFFE91E63),
+    authorColor: Color(0xFFAD1457),
   );
 
   static const forest = ChatPalette(
@@ -197,6 +213,7 @@ class ChatPalettes {
     otherText: Color(0xFF103118),
     quoteBackground: Color(0xFFB7D8B9),
     readTick: Color(0xFF2E7D32),
+    authorColor: Color(0xFF1B5E20),
   );
 
   static const night = ChatPalette(
@@ -210,6 +227,7 @@ class ChatPalettes {
     otherText: Color(0xFFE6E6EE),
     quoteBackground: Color(0xFF34344A),
     readTick: Color(0xFFBB86FC),
+    authorColor: Color(0xFFBB86FC),
   );
 
   static const all = [

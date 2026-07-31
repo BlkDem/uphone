@@ -31,6 +31,7 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
     final chatState = ref.watch(chatProvider);
     final authState = ref.watch(authProvider);
     final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     return Container(
       width: 320,
@@ -137,6 +138,7 @@ class _WebChatSidebarState extends ConsumerState<WebChatSidebar> {
           Expanded(
             child: ChatBackgroundView(
               background: background,
+              fill: backgroundFill,
               child: chatState.isLoadingChats
                   ? const Center(child: CircularProgressIndicator())
                   : chatState.chats.isEmpty

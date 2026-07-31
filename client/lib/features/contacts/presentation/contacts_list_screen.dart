@@ -40,6 +40,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
   Widget build(BuildContext context) {
     final contactsState = ref.watch(contactsProvider);
     final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -111,6 +112,7 @@ class _ContactsListScreenState extends ConsumerState<ContactsListScreen> {
       ),
       body: ChatBackgroundView(
         background: background,
+        fill: backgroundFill,
         child: contactsState.isLoading
             ? const Center(child: CircularProgressIndicator())
             : contactsState.contacts.isEmpty
@@ -418,6 +420,9 @@ class ContactTile extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: theme.colorScheme.surface.withValues(alpha: 0.75),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(

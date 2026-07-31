@@ -31,6 +31,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final authState = ref.watch(authProvider);
     final contactsState = ref.watch(contactsProvider);
     final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     if (kIsWeb || Platform.isWindows) {
       return Scaffold(
@@ -117,6 +118,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       ),
       body: ChatBackgroundView(
         background: background,
+        fill: backgroundFill,
         child: chatState.isLoadingChats
             ? const Center(child: CircularProgressIndicator())
             : chatState.chats.isEmpty
@@ -256,7 +258,7 @@ class ChatTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
-      tileColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.82),
+      tileColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,

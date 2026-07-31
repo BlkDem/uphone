@@ -92,6 +92,8 @@ class MessageBubble extends ConsumerWidget {
               final avatarUrl = senderAvatarUrl.isNotEmpty
                   ? senderAvatarUrl
                   : contactAvatar;
+              final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
+              final authorColor = chatTheme?.authorColor ?? colorScheme.primary;
               return Padding(
                 padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
                 child: Row(
@@ -117,7 +119,7 @@ class MessageBubble extends ConsumerWidget {
                     Text(
                       senderName,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.primary,
+                            color: authorColor,
                             fontWeight: FontWeight.w600,
                             fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
                           ),
@@ -148,8 +150,8 @@ class MessageBubble extends ConsumerWidget {
               color: isSelected
                   ? colorScheme.primary.withValues(alpha: 0.15)
                   : isMe
-                      ? colorScheme.primaryContainer
-                      : colorScheme.surfaceContainerHighest,
+                      ? colorScheme.primaryContainer.withValues(alpha: 0.85)
+                      : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(12),
                 topRight: const Radius.circular(12),
@@ -244,8 +246,8 @@ class MessageBubble extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isMy
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerHighest,
+                          ? colorScheme.primaryContainer.withValues(alpha: 0.85)
+                          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(12),
                       border: isMy
                           ? Border.all(color: colorScheme.primary, width: 1)

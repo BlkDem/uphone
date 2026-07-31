@@ -95,6 +95,9 @@ class AppSettings {
   String get chatBackgroundBytesBase64 => _prefs.getString('chat_background_bytes') ?? '';
   set chatBackgroundBytesBase64(String value) => _prefs.setString('chat_background_bytes', value);
 
+  String get chatBackgroundFillId => _prefs.getString('chat_background_fill') ?? 'cover';
+  set chatBackgroundFillId(String value) => _prefs.setString('chat_background_fill', value);
+
   ChatBackground get chatBackground {
     final id = chatBackgroundId;
     if (id == 'custom') {

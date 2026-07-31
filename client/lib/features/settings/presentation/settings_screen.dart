@@ -188,6 +188,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ref.read(chatBackgroundProvider.notifier).state = ChatBackgrounds.none;
               },
             ),
+          ListTile(
+            leading: const Icon(Icons.fit_screen_outlined),
+            title: const Text('Fill mode'),
+            subtitle: Text(
+              ref.watch(chatBackgroundFillProvider).label,
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _selectFillMode(context),
+          ),
           const Divider(),
           _SectionHeader(title: 'Media Gallery', theme: theme),
           SwitchListTile(
@@ -272,6 +281,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final bg = ChatBackgrounds.custom(bytes);
     AppSettings.instance.chatBackground = bg;
     ref.read(chatBackgroundProvider.notifier).state = bg;
+  }
+
+  void _selectFillMode(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Fill mode',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            for (final fill in WallpaperFill.values)
+              ListTile(
+                leading: Icon(
+                  fill == WallpaperFill.tile
+                      ? Icons.grid_view_outlined
+                      : Icons.fit_screen_outlined,
+                ),
+                title: Text(fill.label),
+                subtitle: Text(
+                  fill == WallpaperFill.tile
+                      ? 'Repeat the image to fill the area'
+                      : 'Stretch the image to cover the area',
+                ),
+                trailing: ref.read(chatBackgroundFillProvider) == fill
+                    ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  AppSettings.instance.chatBackgroundFillId = fill.id;
+                  ref.read(chatBackgroundFillProvider.notifier).state = fill;
+                  Navigator.pop(ctx);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 }
 

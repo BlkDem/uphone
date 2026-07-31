@@ -294,6 +294,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final unreadCount = chat.isNotEmpty ? chat.first.unreadCount : 0;
     final chatName = currentChat?.name ?? 'Chat';
     final background = ref.watch(chatBackgroundProvider);
+    final backgroundFill = ref.watch(chatBackgroundFillProvider);
 
     return Scaffold(
       appBar: _isSelectionMode
@@ -406,6 +407,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Positioned.fill(
             child: ChatBackgroundView(
               background: background,
+              fill: backgroundFill,
               child: Column(
                 children: [
                   Expanded(

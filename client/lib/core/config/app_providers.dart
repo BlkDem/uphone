@@ -9,4 +9,7 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) => AppSettings.instance
 final chatFontSizeProvider = StateProvider<double>((ref) => AppSettings.instance.chatFontSize);
 final chatPaletteProvider = StateProvider<ChatPalette>((ref) => AppSettings.instance.chatPalette);
 final chatBackgroundProvider = StateProvider<ChatBackground>((ref) => AppSettings.instance.chatBackground);
+final chatBackgroundFillProvider = StateProvider<WallpaperFill>(
+  (ref) => WallpaperFill.byId(AppSettings.instance.chatBackgroundFillId),
+);
 final fontProvider = StateProvider<AppFont>((ref) => AppFonts.byId(AppSettings.instance.fontFamilyId));

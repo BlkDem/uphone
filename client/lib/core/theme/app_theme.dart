@@ -91,6 +91,7 @@ class AppTheme {
         ChatPaletteTheme(
           quoteBackground: p.quoteBackground,
           readTick: p.readTick,
+          authorColor: p.authorColor,
         ),
       ],
     );
