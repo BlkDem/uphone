@@ -45,11 +45,46 @@ class MessageBubble extends ConsumerWidget {
     this.quotedMessage,
   });
 
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final fontSize = ref.watch(chatFontSizeProvider);
-    final isMediaOnly = message.content.isEmpty &&
-        (message.type == 'image' || message.type == 'video');
+
+    if (message.type == 'system') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 32),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  message.content,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('HH:mm').format(message.createdAt.toLocal()),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     if (message.isDeleted) {
       return Padding(
@@ -57,14 +92,18 @@ class MessageBubble extends ConsumerWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.delete_outline, size: 14, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.delete_outline,
+              size: 14,
+              color: colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 4),
             Text(
               'Message deleted',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontStyle: FontStyle.italic,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),
@@ -77,11 +116,14 @@ class MessageBubble extends ConsumerWidget {
   Widget _buildNormalMessage(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final fontSize = ref.watch(chatFontSizeProvider);
-    final isMediaOnly = message.content.isEmpty &&
+    final isMediaOnly =
+        message.content.isEmpty &&
         (message.type == 'image' || message.type == 'video');
 
     final bubbleContent = Column(
-      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         if (showSender)
           Builder(
@@ -119,10 +161,10 @@ class MessageBubble extends ConsumerWidget {
                     Text(
                       senderName,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: authorColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
-                          ),
+                        color: authorColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: (fontSize * 0.75).clamp(9.0, 14.0),
+                      ),
                     ),
                   ],
                 ),
@@ -134,7 +176,9 @@ class MessageBubble extends ConsumerWidget {
           onLongPress: selectionMode ? null : () => onSelect?.call(),
           child: Container(
             constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * (isMediaOnly ? 0.85 : 0.7),
+              maxWidth:
+                  MediaQuery.of(context).size.width *
+                  (isMediaOnly ? 0.85 : 0.7),
             ),
             margin: EdgeInsets.only(
               left: isMe ? 36 : 4,
@@ -150,8 +194,8 @@ class MessageBubble extends ConsumerWidget {
               color: isSelected
                   ? colorScheme.primary.withValues(alpha: 0.15)
                   : isMe
-                      ? colorScheme.primaryContainer.withValues(alpha: 0.85)
-                      : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.85)
+                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(12),
                 topRight: const Radius.circular(12),
@@ -183,31 +227,37 @@ class MessageBubble extends ConsumerWidget {
                       onOpen: (link) async {
                         final uri = Uri.parse(link.url);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
                         }
                       },
                     ),
                   ),
                 if (message.fileUrl.isNotEmpty) ...[
                   if (message.content.isNotEmpty) const SizedBox(height: 4),
-                  _buildFilePreview(context, isMediaOnly: isMediaOnly, isMe: isMe),
+                  _buildFilePreview(
+                    context,
+                    isMediaOnly: isMediaOnly,
+                    isMe: isMe,
+                  ),
                 ],
                 Padding(
-                  padding: EdgeInsets.only(
-                    left: isMediaOnly ? 10 : 0,
-                    top: 4,
-                  ),
+                  padding: EdgeInsets.only(left: isMediaOnly ? 10 : 0, top: 4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        DateFormat('HH:mm').format(message.createdAt),
+                        DateFormat('HH:mm').format(message.createdAt.toLocal()),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isMe
-                                  ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                                  : colorScheme.onSurfaceVariant,
-                              fontSize: 10,
-                            ),
+                          color: isMe
+                              ? colorScheme.onPrimaryContainer.withValues(
+                                  alpha: 0.7,
+                                )
+                              : colorScheme.onSurfaceVariant,
+                          fontSize: 10,
+                        ),
                       ),
                       if (message.isPinned) ...[
                         const SizedBox(width: 4),
@@ -243,11 +293,16 @@ class MessageBubble extends ConsumerWidget {
                 return GestureDetector(
                   onTap: () => onReact?.call(e.key),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: isMy
                           ? colorScheme.primaryContainer.withValues(alpha: 0.85)
-                          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
+                          : colorScheme.surfaceContainerHighest.withValues(
+                              alpha: 0.85,
+                            ),
                       borderRadius: BorderRadius.circular(12),
                       border: isMy
                           ? Border.all(color: colorScheme.primary, width: 1)
@@ -262,7 +317,9 @@ class MessageBubble extends ConsumerWidget {
                           '${e.value}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isMy ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                            color: isMy
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -286,7 +343,9 @@ class MessageBubble extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(left: 4),
                       child: Icon(
-                        isSelected ? Icons.check_circle : Icons.radio_button_off,
+                        isSelected
+                            ? Icons.check_circle
+                            : Icons.radio_button_off,
                         color: isSelected
                             ? colorScheme.primary
                             : colorScheme.onSurfaceVariant,
@@ -298,7 +357,9 @@ class MessageBubble extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: Icon(
-                        isSelected ? Icons.check_circle : Icons.radio_button_off,
+                        isSelected
+                            ? Icons.check_circle
+                            : Icons.radio_button_off,
                         color: isSelected
                             ? colorScheme.primary
                             : colorScheme.onSurfaceVariant,
@@ -316,14 +377,16 @@ class MessageBubble extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
     final qm = quotedMessage!;
-    final senderName = qm.sender?.displayName ?? qm.sender?.username ?? 'Unknown';
+    final senderName =
+        qm.sender?.displayName ?? qm.sender?.username ?? 'Unknown';
     final previewText = qm.content.isNotEmpty ? qm.content : '[${qm.type}]';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 4, top: 2),
       padding: const EdgeInsets.only(left: 10, top: 6, bottom: 6, right: 6),
       decoration: BoxDecoration(
-        color: chatTheme?.quoteBackground ?? colorScheme.surfaceContainerHighest,
+        color:
+            chatTheme?.quoteBackground ?? colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
         border: Border(
           left: BorderSide(
@@ -364,7 +427,11 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilePreview(BuildContext context, {bool isMediaOnly = false, bool isMe = false}) {
+  Widget _buildFilePreview(
+    BuildContext context, {
+    bool isMediaOnly = false,
+    bool isMe = false,
+  }) {
     final bubbleBorder = BorderRadius.only(
       topLeft: const Radius.circular(12),
       topRight: const Radius.circular(12),
@@ -388,13 +455,17 @@ class MessageBubble extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.broken_image, size: 32, color: Theme.of(context).colorScheme.error),
+              Icon(
+                Icons.broken_image,
+                size: 32,
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 2),
               Text(
                 'Failed to load',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             ],
           ),
@@ -402,15 +473,9 @@ class MessageBubble extends ConsumerWidget {
       );
 
       if (isMediaOnly) {
-        image = ClipRRect(
-          borderRadius: bubbleBorder,
-          child: image,
-        );
+        image = ClipRRect(borderRadius: bubbleBorder, child: image);
       } else {
-        image = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: image,
-        );
+        image = ClipRRect(borderRadius: BorderRadius.circular(8), child: image);
       }
 
       return Column(
@@ -422,9 +487,19 @@ class MessageBubble extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _actionButton(context, icon: Icons.download, tooltip: 'Save', onPressed: () => _downloadFile(context)),
+                _actionButton(
+                  context,
+                  icon: Icons.download,
+                  tooltip: 'Save',
+                  onPressed: () => _downloadFile(context),
+                ),
                 const SizedBox(width: 4),
-                _actionButton(context, icon: Icons.share, tooltip: 'Share', onPressed: () => _shareFile(context)),
+                _actionButton(
+                  context,
+                  icon: Icons.share,
+                  tooltip: 'Share',
+                  onPressed: () => _shareFile(context),
+                ),
               ],
             ),
           ),
@@ -439,18 +514,34 @@ class MessageBubble extends ConsumerWidget {
           if (isMediaOnly)
             ClipRRect(
               borderRadius: bubbleBorder,
-              child: AspectRatio(aspectRatio: 16 / 9, child: buildVideoPlayer(message.fileUrl)),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: buildVideoPlayer(message.fileUrl),
+              ),
             )
           else
-            AspectRatio(aspectRatio: 16 / 9, child: buildVideoPlayer(message.fileUrl)),
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: buildVideoPlayer(message.fileUrl),
+            ),
           Padding(
             padding: EdgeInsets.only(left: isMediaOnly ? 10 : 0, top: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _actionButton(context, icon: Icons.download, tooltip: 'Save', onPressed: () => _downloadFile(context)),
+                _actionButton(
+                  context,
+                  icon: Icons.download,
+                  tooltip: 'Save',
+                  onPressed: () => _downloadFile(context),
+                ),
                 const SizedBox(width: 4),
-                _actionButton(context, icon: Icons.share, tooltip: 'Share', onPressed: () => _shareFile(context)),
+                _actionButton(
+                  context,
+                  icon: Icons.share,
+                  tooltip: 'Share',
+                  onPressed: () => _shareFile(context),
+                ),
               ],
             ),
           ),
@@ -537,7 +628,11 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusIcon(BuildContext context, String status, ColorScheme colorScheme) {
+  Widget _buildStatusIcon(
+    BuildContext context,
+    String status,
+    ColorScheme colorScheme,
+  ) {
     final chatTheme = Theme.of(context).extension<ChatPaletteTheme>();
     final readColor = chatTheme?.readTick ?? colorScheme.primary;
     final Color color;
@@ -562,10 +657,7 @@ class MessageBubble extends ConsumerWidget {
         break;
     }
 
-    return SizedBox(
-      width: 22,
-      child: Icon(icon, size: 13, color: color),
-    );
+    return SizedBox(width: 22, child: Icon(icon, size: 13, color: color));
   }
 
   IconData _getFileIcon() {
@@ -585,15 +677,15 @@ class MessageBubble extends ConsumerWidget {
     try {
       await DownloadHelper.downloadFile(message.fileUrl);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('File saved')));
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
       }
     }
   }
@@ -603,9 +695,9 @@ class MessageBubble extends ConsumerWidget {
       await Share.shareUri(Uri.parse(message.fileUrl));
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Share failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Share failed: $e')));
       }
     }
   }
@@ -632,12 +724,26 @@ class MessageBubble extends ConsumerWidget {
 
   void _showContextMenu(BuildContext context) {
     // Always show - Select option is always present
-  
 
     final quickEmojis = [
-      '👍', '👎', '❤️', '🔥', '😂', '😮',
-      '😢', '😡', '🎉', '👏', '🤔', '🤮',
-      '💀', '🙏', '💯', '😍', '🤝', '😴',
+      '👍',
+      '👎',
+      '❤️',
+      '🔥',
+      '😂',
+      '😮',
+      '😢',
+      '😡',
+      '🎉',
+      '👏',
+      '🤔',
+      '🤮',
+      '💀',
+      '🙏',
+      '💯',
+      '😍',
+      '🤝',
+      '😴',
     ];
 
     showModalBottomSheet(
@@ -649,7 +755,10 @@ class MessageBubble extends ConsumerWidget {
             children: [
               if (onReact != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   child: Wrap(
                     spacing: 4,
                     runSpacing: 4,
@@ -666,20 +775,29 @@ class MessageBubble extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: isMy
                                 ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                             shape: BoxShape.circle,
                             border: isMy
-                                ? Border.all(color: Theme.of(context).colorScheme.primary)
+                                ? Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  )
                                 : null,
                           ),
                           child: Center(
-                            child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                            child: Text(
+                              emoji,
+                              style: const TextStyle(fontSize: 20),
+                            ),
                           ),
                         ),
                       );
                     }).toList(),
                   ),
-              ),
+                ),
               ListTile(
                 leading: const Icon(Icons.check_box_outlined),
                 title: const Text('Select'),
@@ -709,7 +827,10 @@ class MessageBubble extends ConsumerWidget {
               if (onDelete != null)
                 ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                  title: const Text(
+                    'Delete',
+                    style: TextStyle(color: Colors.red),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     onDelete?.call();
