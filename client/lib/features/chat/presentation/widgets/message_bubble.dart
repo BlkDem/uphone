@@ -45,11 +45,32 @@ class MessageBubble extends ConsumerWidget {
     this.quotedMessage,
   });
 
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final fontSize = ref.watch(chatFontSizeProvider);
-    final isMediaOnly = message.content.isEmpty &&
-        (message.type == 'image' || message.type == 'video');
+
+    if (message.type == 'system') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 32),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              message.content,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
+            ),
+          ),
+        ),
+      );
+    }
 
     if (message.isDeleted) {
       return Padding(

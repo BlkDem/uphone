@@ -782,7 +782,7 @@ func (r *Repository) SendSystemMessage(ctx context.Context, chatID, content stri
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO messages (id, chat_id, sender_id, content, type, created_at, updated_at)
-		 VALUES (?, '', ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, NULL, ?, ?, ?, ?)`,
 		msg.ID, msg.ChatID, msg.Content, msg.Type, msg.CreatedAt, msg.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert system message: %w", err)

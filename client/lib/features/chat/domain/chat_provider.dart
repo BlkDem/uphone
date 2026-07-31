@@ -252,7 +252,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
             _addMessage(msg);
             if (msg.senderId != currentUserId) {
               final senderName = msg.sender?.displayName ?? msg.sender?.username ?? 'Новое сообщение';
-              final text = msg.type == 'text' ? (msg.content ?? '') : '[${msg.type}]';
+              final text = (msg.type == 'text' || msg.type == 'system')
+                  ? msg.content
+                  : '[${msg.type}]';
               final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
               NotificationService.instance.showNewMessageNotification(senderName, preview);
             }
