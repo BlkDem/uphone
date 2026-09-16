@@ -25,6 +25,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.JWTSecret != "change-me-in-production" {
 		t.Errorf("expected JWTSecret fallback, got %s", cfg.JWTSecret)
 	}
+	if cfg.ThumbnailWidth != 360 {
+		t.Errorf("expected ThumbnailWidth 360, got %d", cfg.ThumbnailWidth)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -36,6 +39,7 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("DB_NAME", "mydb")
 	os.Setenv("JWT_SECRET", "my-super-secret")
 	os.Setenv("UPLOAD_DIR", "/tmp/uploads")
+	os.Setenv("THUMBNAIL_WIDTH", "720")
 	defer os.Clearenv()
 
 	cfg := Load()
@@ -63,6 +67,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.UploadDir != "/tmp/uploads" {
 		t.Errorf("expected UploadDir /tmp/uploads, got %s", cfg.UploadDir)
+	}
+	if cfg.ThumbnailWidth != 720 {
+		t.Errorf("expected ThumbnailWidth 720, got %d", cfg.ThumbnailWidth)
 	}
 }
 

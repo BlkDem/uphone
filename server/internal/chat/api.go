@@ -151,12 +151,15 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &Message{
-		ChatID:   chatID,
-		SenderID: userID,
-		Content:  req.Content,
-		Type:     req.Type,
-		FileURL:  req.FileURL,
-		ReplyTo:  req.ReplyTo,
+		ChatID:          chatID,
+		SenderID:        userID,
+		Content:         req.Content,
+		Type:            req.Type,
+		FileURL:         req.FileURL,
+		ThumbnailURL:    req.ThumbnailURL,
+		ThumbnailWidth:  req.ThumbnailWidth,
+		ThumbnailHeight: req.ThumbnailHeight,
+		ReplyTo:         req.ReplyTo,
 	}
 
 	if err := h.repo.SendMessage(r.Context(), msg); err != nil {

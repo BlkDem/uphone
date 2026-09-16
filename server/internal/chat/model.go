@@ -43,21 +43,24 @@ type UpdateChatRequest struct {
 }
 
 type Message struct {
-	ID           string            `json:"id"`
-	ChatID       string            `json:"chat_id"`
-	SenderID     string            `json:"sender_id"`
-	Content      string            `json:"content"`
-	Type         string            `json:"type"`
-	FileURL      string            `json:"file_url,omitempty"`
-	ReplyTo      string            `json:"reply_to,omitempty"`
-	IsPinned     bool              `json:"is_pinned"`
-	IsDeleted    bool              `json:"is_deleted"`
-	Status       string            `json:"status,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
-	Sender       *Sender           `json:"sender,omitempty"`
-	Reactions    map[string]int    `json:"reactions,omitempty"`
-	MyReactions  []string          `json:"my_reactions,omitempty"`
+	ID              string            `json:"id"`
+	ChatID          string            `json:"chat_id"`
+	SenderID        string            `json:"sender_id"`
+	Content         string            `json:"content"`
+	Type            string            `json:"type"`
+	FileURL         string            `json:"file_url,omitempty"`
+	ThumbnailURL    string            `json:"thumbnail_url,omitempty"`
+	ThumbnailWidth  int               `json:"thumbnail_width,omitempty"`
+	ThumbnailHeight int               `json:"thumbnail_height,omitempty"`
+	ReplyTo         string            `json:"reply_to,omitempty"`
+	IsPinned        bool              `json:"is_pinned"`
+	IsDeleted       bool              `json:"is_deleted"`
+	Status          string            `json:"status,omitempty"`
+	CreatedAt       time.Time         `json:"created_at"`
+	UpdatedAt       time.Time         `json:"updated_at"`
+	Sender          *Sender           `json:"sender,omitempty"`
+	Reactions       map[string]int    `json:"reactions,omitempty"`
+	MyReactions     []string          `json:"my_reactions,omitempty"`
 }
 
 type Sender struct {
@@ -75,10 +78,13 @@ type MessagesResponse struct {
 }
 
 type SendMessageRequest struct {
-	Content string `json:"content"`
-	Type    string `json:"type"`
-	FileURL string `json:"file_url,omitempty"`
-	ReplyTo string `json:"reply_to,omitempty"`
+	Content         string `json:"content"`
+	Type            string `json:"type"`
+	FileURL         string `json:"file_url,omitempty"`
+	ThumbnailURL    string `json:"thumbnail_url,omitempty"`
+	ThumbnailWidth  int    `json:"thumbnail_width,omitempty"`
+	ThumbnailHeight int    `json:"thumbnail_height,omitempty"`
+	ReplyTo         string `json:"reply_to,omitempty"`
 }
 
 type EditMessageRequest struct {

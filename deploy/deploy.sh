@@ -182,7 +182,7 @@ log "Installing system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 
-PKGS="git curl wget unzip build-essential nginx coturn"
+PKGS="git curl wget unzip build-essential nginx coturn ffmpeg"
 
 if [[ "${SKIP_DB}" != "true" ]]; then
     PKGS="${PKGS} mysql-server mysql-client"

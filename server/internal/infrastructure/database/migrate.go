@@ -17,6 +17,7 @@ func Migrate(db *sql.DB) error {
 		"migrations/006_message_reads.sql",
 		"migrations/007_call_logs.sql",
 		"migrations/008_message_deletions.sql",
+		"migrations/009_media_previews.sql",
 	}
 
 	for _, migrationPath := range migrations {

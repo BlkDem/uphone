@@ -242,10 +242,10 @@ class _ChatInfoScreenState extends ConsumerState<ChatInfoScreen> {
     if (_pendingAvatarBytes == null) return;
     try {
       final repo = ref.read(chatRepositoryProvider);
-      final result = await repo.uploadFile('avatar.jpg', 'image/jpeg', _pendingAvatarBytes!);
+      final result = await repo.uploadFile('avatar.jpg', 'image/jpeg', bytes: _pendingAvatarBytes!);
       final dio = ref.read(apiClientProvider).dio;
       await dio.put('/api/v1/chats/${widget.chatId}', data: {
-        'avatar_url': result['url'],
+        'avatar_url': result.url,
       });
       ref.read(chatProvider.notifier).loadChats();
       setState(() => _pendingAvatarBytes = null);

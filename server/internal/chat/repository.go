@@ -111,7 +111,8 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 		`SELECT c.id, c.type, COALESCE(c.name,''), COALESCE(c.description,''), COALESCE(c.avatar_url,''),
 		        COALESCE(c.created_by,''), c.created_at, c.updated_at,
 		        lm.id, lm.chat_id, lm.sender_id, COALESCE(lm.content,''), lm.type,
-		        COALESCE(lm.file_url,''), COALESCE(lm.reply_to,''), lm.is_pinned, lm.is_deleted,
+		        COALESCE(lm.file_url,''), COALESCE(lm.thumbnail_url,''), COALESCE(lm.thumbnail_width,0), COALESCE(lm.thumbnail_height,0),
+		        COALESCE(lm.reply_to,''), lm.is_pinned, lm.is_deleted,
 		        lm.created_at, lm.updated_at,
 		        lu.id, lu.username, COALESCE(lu.display_name,''), COALESCE(lu.avatar_url,''),
 		        COALESCE(u_peer.display_name,''), COALESCE(u_peer.username,''), COALESCE(u_peer.avatar_url,'')
@@ -136,7 +137,8 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 	for rows.Next() {
 		var c Chat
 		var chatType string
-		var lmID, lmChatID, lmSenderID, lmContent, lmType, lmFileURL, lmReplyTo sql.NullString
+		var lmID, lmChatID, lmSenderID, lmContent, lmType, lmFileURL, lmThumbnailURL, lmReplyTo sql.NullString
+		var lmThumbnailWidth, lmThumbnailHeight sql.NullInt64
 		var lmIsPinned, lmIsDeleted sql.NullBool
 		var lmCreatedAt, lmUpdatedAt sql.NullTime
 		var luID, luUsername, luDisplayName, luAvatarURL sql.NullString
@@ -146,7 +148,8 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 			&c.ID, &chatType, &c.Name, &c.Description, &c.AvatarURL,
 			&c.CreatedBy, &c.CreatedAt, &c.UpdatedAt,
 			&lmID, &lmChatID, &lmSenderID, &lmContent, &lmType,
-			&lmFileURL, &lmReplyTo, &lmIsPinned, &lmIsDeleted,
+			&lmFileURL, &lmThumbnailURL, &lmThumbnailWidth, &lmThumbnailHeight,
+			&lmReplyTo, &lmIsPinned, &lmIsDeleted,
 			&lmCreatedAt, &lmUpdatedAt,
 			&luID, &luUsername, &luDisplayName, &luAvatarURL,
 			&peerDisplayName, &peerUsername, &peerAvatarURL); err != nil {
@@ -170,19 +173,26 @@ func (r *Repository) GetUserChats(ctx context.Context, userID string) ([]Chat, e
 
 		if lmID.Valid {
 			msg := &Message{
-				ID:       lmID.String,
-				ChatID:   lmChatID.String,
-				SenderID: lmSenderID.String,
-				Content:  lmContent.String,
-				Type:     lmType.String,
-				FileURL:  lmFileURL.String,
-				ReplyTo:  lmReplyTo.String,
+				ID:              lmID.String,
+				ChatID:          lmChatID.String,
+				SenderID:        lmSenderID.String,
+				Content:         lmContent.String,
+				Type:            lmType.String,
+				FileURL:         lmFileURL.String,
+				ThumbnailURL:    lmThumbnailURL.String,
+				ReplyTo:         lmReplyTo.String,
 				Sender: &Sender{
 					ID:          luID.String,
 					Username:    luUsername.String,
 					DisplayName: luDisplayName.String,
 					AvatarURL:   luAvatarURL.String,
 				},
+			}
+			if lmThumbnailWidth.Valid {
+				msg.ThumbnailWidth = int(lmThumbnailWidth.Int64)
+			}
+			if lmThumbnailHeight.Valid {
+				msg.ThumbnailHeight = int(lmThumbnailHeight.Int64)
 			}
 			if lmIsPinned.Valid {
 				msg.IsPinned = lmIsPinned.Bool
@@ -325,12 +335,24 @@ func (r *Repository) SendMessage(ctx context.Context, msg *Message) error {
 	if msg.FileURL != "" {
 		fileURL = msg.FileURL
 	}
+	var thumbnailURL interface{} = nil
+	if msg.ThumbnailURL != "" {
+		thumbnailURL = msg.ThumbnailURL
+	}
+	var thumbnailWidth interface{} = nil
+	if msg.ThumbnailWidth > 0 {
+		thumbnailWidth = msg.ThumbnailWidth
+	}
+	var thumbnailHeight interface{} = nil
+	if msg.ThumbnailHeight > 0 {
+		thumbnailHeight = msg.ThumbnailHeight
+	}
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, reply_to, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, thumbnail_url, thumbnail_width, thumbnail_height, reply_to, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		msg.ID, msg.ChatID, msg.SenderID, msg.Content, msg.Type,
-		fileURL, replyTo, msg.CreatedAt, msg.UpdatedAt)
+		fileURL, thumbnailURL, thumbnailWidth, thumbnailHeight, replyTo, msg.CreatedAt, msg.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
@@ -358,7 +380,8 @@ func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, lim
 
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT m.id, m.chat_id, COALESCE(m.sender_id,''), COALESCE(m.content,''), m.type,
-		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
+		        COALESCE(m.file_url,''), COALESCE(m.thumbnail_url,''), COALESCE(m.thumbnail_width,0), COALESCE(m.thumbnail_height,0),
+		        COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
 		        m.created_at, m.updated_at,
 		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,''),
 		        CASE
@@ -388,7 +411,8 @@ func (r *Repository) GetMessages(ctx context.Context, chatID, userID string, lim
 
 		if err := rows.Scan(
 			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
-			&msg.FileURL, &replyTo, &msg.IsPinned, &msg.IsDeleted,
+			&msg.FileURL, &msg.ThumbnailURL, &msg.ThumbnailWidth, &msg.ThumbnailHeight,
+			&replyTo, &msg.IsPinned, &msg.IsDeleted,
 			&msg.CreatedAt, &msg.UpdatedAt,
 			&senderID, &username, &displayName, &avatarURL, &status); err != nil {
 			return nil, err
@@ -438,10 +462,12 @@ func (r *Repository) GetMessageByID(ctx context.Context, msgID string) (*Message
 
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, chat_id, COALESCE(sender_id,''), COALESCE(content,''), type,
-		        COALESCE(file_url,''), reply_to, is_pinned, is_deleted, created_at, updated_at
+		        COALESCE(file_url,''), COALESCE(thumbnail_url,''), COALESCE(thumbnail_width,0), COALESCE(thumbnail_height,0),
+		        COALESCE(reply_to,''), is_pinned, is_deleted, created_at, updated_at
 		 FROM messages WHERE id = ?`, msgID).Scan(
 		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
-		&msg.FileURL, &replyTo, &msg.IsPinned, &msg.IsDeleted,
+		&msg.FileURL, &msg.ThumbnailURL, &msg.ThumbnailWidth, &msg.ThumbnailHeight,
+		&replyTo, &msg.IsPinned, &msg.IsDeleted,
 		&msg.CreatedAt, &msg.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("message not found")
@@ -611,7 +637,8 @@ func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, userID
 	}
 
 	query := `SELECT m.id, m.chat_id, COALESCE(m.sender_id,''), COALESCE(m.content,''), m.type,
-		        COALESCE(m.file_url,''), COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
+		        COALESCE(m.file_url,''), COALESCE(m.thumbnail_url,''), COALESCE(m.thumbnail_width,0), COALESCE(m.thumbnail_height,0),
+		        COALESCE(m.reply_to,''), m.is_pinned, m.is_deleted,
 		        m.created_at, m.updated_at,
 		        u.id, u.username, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')
 		 FROM messages m
@@ -642,7 +669,8 @@ func (r *Repository) GetMediaMessages(ctx context.Context, chatID string, userID
 
 		if err := rows.Scan(
 			&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.Type,
-			&msg.FileURL, &replyTo, &msg.IsPinned, &msg.IsDeleted,
+			&msg.FileURL, &msg.ThumbnailURL, &msg.ThumbnailWidth, &msg.ThumbnailHeight,
+			&replyTo, &msg.IsPinned, &msg.IsDeleted,
 			&msg.CreatedAt, &msg.UpdatedAt,
 			&senderID, &username, &displayName, &avatarURL); err != nil {
 			return nil, err
@@ -744,12 +772,24 @@ func (r *Repository) ForwardMessage(ctx context.Context, targetChatID string, ms
 	if msg.FileURL != "" {
 		fileURL = msg.FileURL
 	}
+	var thumbnailURL interface{} = nil
+	if msg.ThumbnailURL != "" {
+		thumbnailURL = msg.ThumbnailURL
+	}
+	var thumbnailWidth interface{} = nil
+	if msg.ThumbnailWidth > 0 {
+		thumbnailWidth = msg.ThumbnailWidth
+	}
+	var thumbnailHeight interface{} = nil
+	if msg.ThumbnailHeight > 0 {
+		thumbnailHeight = msg.ThumbnailHeight
+	}
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, reply_to, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO messages (id, chat_id, sender_id, content, type, file_url, thumbnail_url, thumbnail_width, thumbnail_height, reply_to, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		msg.ID, msg.ChatID, msg.SenderID, msg.Content, msg.Type,
-		fileURL, replyTo, msg.CreatedAt, msg.UpdatedAt)
+		fileURL, thumbnailURL, thumbnailWidth, thumbnailHeight, replyTo, msg.CreatedAt, msg.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}

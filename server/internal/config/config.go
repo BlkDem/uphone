@@ -21,6 +21,7 @@ type Config struct {
 	TurnURL        string
 	TurnUser       string
 	TurnPass       string
+	ThumbnailWidth int
 }
 
 type DBConfig struct {
@@ -54,6 +55,7 @@ func Load() *Config {
 		TurnURL:        getEnv("TURN_URL", ""),
 		TurnUser:       getEnv("TURN_USER", ""),
 		TurnPass:       getEnv("TURN_PASS", ""),
+		ThumbnailWidth: getEnvInt("THUMBNAIL_WIDTH", 360),
 	}
 }
 

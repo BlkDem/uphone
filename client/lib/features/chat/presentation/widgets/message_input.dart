@@ -7,7 +7,7 @@ import 'package:uphone_client/shared/models/chat.dart';
 
 class MessageInput extends StatefulWidget {
   final Function(String) onSend;
-  final Function(String, String, Uint8List)? onSendFile;
+  final Function(String, String, String?, Uint8List?)? onSendFile;
   final VoidCallback? onTypingStart;
   final VoidCallback? onTypingStop;
   final ChatMessage? editingMessage;
@@ -120,12 +120,7 @@ class _MessageInputState extends State<MessageInput> {
         allowMultiple: false,
       );
       if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        if (file.bytes != null) {
-          final ext = file.name.split('.').last.toLowerCase();
-          final mimeType = _getMimeType(ext);
-          _sendFile(file.name, mimeType, file.bytes!);
-        }
+        await _sendPickedFile(result.files.first);
       }
     } catch (e) {
       debugPrint('Image pick failed: $e');
@@ -141,12 +136,7 @@ class _MessageInputState extends State<MessageInput> {
         allowMultiple: false,
       );
       if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        if (file.bytes != null) {
-          final ext = file.name.split('.').last.toLowerCase();
-          final mimeType = _getMimeType(ext);
-          _sendFile(file.name, mimeType, file.bytes!);
-        }
+        await _sendPickedFile(result.files.first);
       }
     } catch (e) {
       debugPrint('Video pick failed: $e');
@@ -161,16 +151,17 @@ class _MessageInputState extends State<MessageInput> {
         allowMultiple: false,
       );
       if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        if (file.bytes != null) {
-          final ext = file.name.split('.').last.toLowerCase();
-          final mimeType = _getMimeType(ext);
-          _sendFile(file.name, mimeType, file.bytes!);
-        }
+        await _sendPickedFile(result.files.first);
       }
     } catch (e) {
       debugPrint('File pick failed: $e');
     }
+  }
+
+  Future<void> _sendPickedFile(PlatformFile file) async {
+    final ext = file.name.split('.').last.toLowerCase();
+    final mimeType = _getMimeType(ext);
+    _sendFile(file.name, mimeType, file.path, file.bytes);
   }
 
   String _getMimeType(String ext) {
@@ -184,14 +175,33 @@ class _MessageInputState extends State<MessageInput> {
         return 'image/gif';
       case 'webp':
         return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      case 'heic':
+      case 'heif':
+        return 'image/heic';
+      case 'tif':
+      case 'tiff':
+        return 'image/tiff';
       case 'mp4':
         return 'video/mp4';
       case 'webm':
         return 'video/webm';
+      case 'mov':
+        return 'video/quicktime';
+      case 'mkv':
+        return 'video/x-matroska';
+      case '3gp':
+      case '3gpp':
+        return 'video/3gpp';
+      case 'avi':
+        return 'video/x-msvideo';
       case 'mp3':
         return 'audio/mpeg';
       case 'ogg':
         return 'audio/ogg';
+      case 'wav':
+        return 'audio/wav';
       case 'pdf':
         return 'application/pdf';
       default:
@@ -199,10 +209,10 @@ class _MessageInputState extends State<MessageInput> {
     }
   }
 
-  Future<void> _sendFile(String filename, String mimeType, Uint8List bytes) async {
+  Future<void> _sendFile(String filename, String mimeType, String? path, Uint8List? bytes) async {
     setState(() => _isUploading = true);
     try {
-      await widget.onSendFile?.call(filename, mimeType, bytes);
+      await widget.onSendFile?.call(filename, mimeType, path, bytes);
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
