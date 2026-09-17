@@ -65,7 +65,7 @@ func main() {
 	}
 
 	var uploadHandler *chat.UploadHandler
-	if cfg.MinIOEndpoint != "" {
+	if cfg.S3.Endpoint != "" {
 		s3Storage, err := storage.NewS3Storage(cfg)
 		if err != nil {
 			log.Printf("warning: failed to init S3 storage: %v, falling back to local filesystem", err)
