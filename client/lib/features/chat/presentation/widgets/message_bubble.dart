@@ -25,6 +25,7 @@ class MessageBubble extends ConsumerWidget {
   final Function(String)? onReact;
   final VoidCallback? onForward;
   final VoidCallback? onTapImage;
+  final VoidCallback? onTapVideo;
   final ChatMessage? quotedMessage;
 
   const MessageBubble({
@@ -42,6 +43,7 @@ class MessageBubble extends ConsumerWidget {
     this.onReact,
     this.onForward,
     this.onTapImage,
+    this.onTapVideo,
     this.quotedMessage,
   });
 
@@ -440,36 +442,75 @@ class MessageBubble extends ConsumerWidget {
     );
 
     if (message.type == 'image') {
-      Widget image = CachedNetworkImage(
-        imageUrl: message.fileUrl,
-        width: isMediaOnly ? double.infinity : 220,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          height: 160,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-        errorWidget: (context, url, error) => Container(
-          height: 120,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.broken_image,
-                size: 32,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Failed to load',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
+      final hasThumb =
+          message.thumbnailWidth > 0 && message.thumbnailHeight > 0;
+      final placeholderColor =
+          Theme.of(context).colorScheme.surfaceContainerHighest;
+      final screenMax = MediaQuery.of(context).size.width * 0.85;
+      final maxW = hasThumb
+          ? message.thumbnailWidth.toDouble().clamp(1.0, screenMax)
+          : (isMediaOnly ? 360.0 : 220.0);
+
+      Widget image = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: hasThumb
+            ? AspectRatio(
+                aspectRatio: message.thumbnailWidth / message.thumbnailHeight,
+                child: CachedNetworkImage(
+                  imageUrl: message.thumbnailUrl.isNotEmpty
+                      ? message.thumbnailUrl
+                      : message.fileUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: placeholderColor,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: placeholderColor,
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : CachedNetworkImage(
+                imageUrl: message.fileUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  height: 160,
+                  color: placeholderColor,
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  height: 120,
+                  color: placeholderColor,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.broken_image,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Failed to load',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
       );
 
       if (isMediaOnly) {
@@ -508,22 +549,78 @@ class MessageBubble extends ConsumerWidget {
     }
 
     if (message.type == 'video') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      final hasThumb =
+          message.thumbnailWidth > 0 && message.thumbnailHeight > 0;
+      final aspectRatio =
+          hasThumb ? message.thumbnailWidth / message.thumbnailHeight : 16 / 9;
+      final previewColor =
+          Theme.of(context).colorScheme.surfaceContainerHighest;
+      final screenMax = MediaQuery.of(context).size.width * 0.85;
+      final maxW = hasThumb
+          ? message.thumbnailWidth.toDouble().clamp(1.0, screenMax)
+          : 360.0;
+
+      Widget preview = Stack(
+        fit: StackFit.expand,
         children: [
-          if (isMediaOnly)
-            ClipRRect(
-              borderRadius: bubbleBorder,
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: buildVideoPlayer(message.fileUrl),
+          if (hasThumb)
+            CachedNetworkImage(
+              imageUrl: message.thumbnailUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                color: previewColor,
+                child: const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: previewColor,
+                child: Center(
+                  child: Icon(
+                    Icons.broken_image,
+                    size: 32,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
               ),
             )
           else
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: buildVideoPlayer(message.fileUrl),
+            Container(
+              color: previewColor,
+              child: Center(
+                child: Icon(
+                  Icons.videocam,
+                  size: 40,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
+          Center(
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.play_arrow, color: Colors.white, size: 30),
+            ),
+          ),
+        ],
+      );
+
+      preview = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: AspectRatio(aspectRatio: aspectRatio, child: preview),
+      );
+      if (isMediaOnly) {
+        preview = ClipRRect(borderRadius: bubbleBorder, child: preview);
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(onTap: onTapVideo, child: preview),
           Padding(
             padding: EdgeInsets.only(left: isMediaOnly ? 10 : 0, top: 4),
             child: Row(

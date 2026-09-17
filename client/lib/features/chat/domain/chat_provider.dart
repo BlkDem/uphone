@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -33,6 +32,69 @@ class MessagesPage {
       limit: json['limit'] as int? ?? 50,
     );
   }
+}
+
+class UploadResult {
+  final String url;
+  final String filename;
+  final String thumbnailUrl;
+  final int thumbnailWidth;
+  final int thumbnailHeight;
+
+  const UploadResult({
+    required this.url,
+    required this.filename,
+    this.thumbnailUrl = '',
+    this.thumbnailWidth = 0,
+    this.thumbnailHeight = 0,
+  });
+}
+
+class PendingUpload {
+  final String id;
+  final String chatId;
+  final String filename;
+  final String mimeType;
+  final String? filePath;
+  final Uint8List? bytes;
+  final String replyTo;
+  final double progress;
+  final bool failed;
+
+  const PendingUpload({
+    required this.id,
+    required this.chatId,
+    required this.filename,
+    required this.mimeType,
+    this.filePath,
+    this.bytes,
+    this.replyTo = '',
+    this.progress = 0,
+    this.failed = false,
+  });
+
+  String get type => mediaTypeFromMime(mimeType);
+
+  PendingUpload copyWith({double? progress, bool? failed}) {
+    return PendingUpload(
+      id: id,
+      chatId: chatId,
+      filename: filename,
+      mimeType: mimeType,
+      filePath: filePath,
+      bytes: bytes,
+      replyTo: replyTo,
+      progress: progress ?? this.progress,
+      failed: failed ?? this.failed,
+    );
+  }
+}
+
+String mediaTypeFromMime(String mimeType) {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'voice';
+  return 'file';
 }
 
 class ChatRepository {
@@ -123,38 +185,71 @@ class ChatRepository {
     });
   }
 
-  Future<Map<String, String>> uploadFile(String filename, String mimeType, Uint8List bytes) async {
-    final formData = FormData.fromMap({
-      'file': MultipartFile.fromBytes(
+  Future<UploadResult> uploadFile(
+    String filename,
+    String mimeType, {
+    String? filePath,
+    Uint8List? bytes,
+    void Function(double progress)? onProgress,
+  }) async {
+    final MultipartFile part;
+    if (filePath != null && filePath.isNotEmpty) {
+      part = await MultipartFile.fromFile(
+        filePath,
+        filename: filename,
+        contentType: DioMediaType.parse(mimeType),
+      );
+    } else if (bytes != null) {
+      part = MultipartFile.fromBytes(
         bytes,
         filename: filename,
         contentType: DioMediaType.parse(mimeType),
-      ),
-    });
-    final response = await _dio.post('/api/v1/upload', data: formData);
-    final data = response.data;
-    return {'url': data['url'] as String, 'filename': data['filename'] as String};
+      );
+    } else {
+      throw ArgumentError('either filePath or bytes must be provided');
+    }
+    final formData = FormData.fromMap({'file': part});
+    final response = await _dio.post(
+      '/api/v1/upload',
+      data: formData,
+      onSendProgress: (sent, total) {
+        if (total > 0 && onProgress != null) onProgress(sent / total);
+      },
+    );
+    final data = response.data as Map<String, dynamic>;
+    return UploadResult(
+      url: data['url'] as String? ?? '',
+      filename: data['filename'] as String? ?? filename,
+      thumbnailUrl: data['thumbnail_url'] as String? ?? '',
+      thumbnailWidth: (data['thumbnail_width'] as num?)?.toInt() ?? 0,
+      thumbnailHeight: (data['thumbnail_height'] as num?)?.toInt() ?? 0,
+    );
   }
 
   Future<ChatMessage> sendMessageWithFile(
     String chatId, {
     required String filename,
     required String mimeType,
-    required Uint8List bytes,
+    String? filePath,
+    Uint8List? bytes,
     String replyTo = '',
+    void Function(double progress)? onProgress,
   }) async {
-    final uploadResult = await uploadFile(filename, mimeType, bytes);
-    final type = mimeType.startsWith('image/')
-        ? 'image'
-        : mimeType.startsWith('video/')
-            ? 'video'
-            : mimeType.startsWith('audio/')
-                ? 'voice'
-                : 'file';
+    final uploadResult = await uploadFile(
+      filename,
+      mimeType,
+      filePath: filePath,
+      bytes: bytes,
+      onProgress: onProgress,
+    );
+    final type = mediaTypeFromMime(mimeType);
     final data = <String, dynamic>{
       'content': '',
       'type': type,
-      'file_url': uploadResult['url'],
+      'file_url': uploadResult.url,
+      'thumbnail_url': uploadResult.thumbnailUrl,
+      'thumbnail_width': uploadResult.thumbnailWidth,
+      'thumbnail_height': uploadResult.thumbnailHeight,
     };
     if (replyTo.isNotEmpty) data['reply_to'] = replyTo;
     final response = await _dio.post('/api/v1/chats/$chatId/messages', data: data);
@@ -175,6 +270,7 @@ class ChatState {
   final int savedUnreadCount;
   final Map<String, bool> typingUsers;
   final Map<String, ChatMessage> messageCache;
+  final List<PendingUpload> pendingUploads;
 
   const ChatState({
     this.chats = const [],
@@ -189,6 +285,7 @@ class ChatState {
     this.savedUnreadCount = 0,
     this.typingUsers = const {},
     this.messageCache = const {},
+    this.pendingUploads = const [],
   });
 
   ChatState copyWith({
@@ -204,6 +301,7 @@ class ChatState {
     int? savedUnreadCount,
     Map<String, bool>? typingUsers,
     Map<String, ChatMessage>? messageCache,
+    List<PendingUpload>? pendingUploads,
   }) {
     return ChatState(
       chats: chats ?? this.chats,
@@ -218,6 +316,7 @@ class ChatState {
       savedUnreadCount: savedUnreadCount ?? this.savedUnreadCount,
       typingUsers: typingUsers ?? this.typingUsers,
       messageCache: messageCache ?? this.messageCache,
+      pendingUploads: pendingUploads ?? this.pendingUploads,
     );
   }
 
@@ -548,13 +647,88 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (_) {}
   }
 
-  Future<void> sendFile(String chatId, String filename, String mimeType, Uint8List bytes, {String replyTo = ''}) async {
+  Future<void> sendFile(String chatId, String filename, String mimeType, {String? filePath, Uint8List? bytes, String replyTo = ''}) async {
+    final id = 'pending_${DateTime.now().microsecondsSinceEpoch}';
+    _addPendingUpload(
+      PendingUpload(
+        id: id,
+        chatId: chatId,
+        filename: filename,
+        mimeType: mimeType,
+        filePath: filePath,
+        bytes: bytes,
+        replyTo: replyTo,
+      ),
+    );
+    await _performSend(
+      pendingId: id,
+      chatId: chatId,
+      filename: filename,
+      mimeType: mimeType,
+      filePath: filePath,
+      bytes: bytes,
+      replyTo: replyTo,
+    );
+  }
+
+  Future<void> retryPendingUpload(String id) async {
+    final pending = state.pendingUploads.where((p) => p.id == id).firstOrNull;
+    if (pending == null || !pending.failed) return;
+    _updatePendingUpload(id, progress: 0, failed: false);
+    await _performSend(
+      pendingId: id,
+      chatId: pending.chatId,
+      filename: pending.filename,
+      mimeType: pending.mimeType,
+      filePath: pending.filePath,
+      bytes: pending.bytes,
+      replyTo: pending.replyTo,
+    );
+  }
+
+  Future<void> _performSend({
+    required String pendingId,
+    required String chatId,
+    required String filename,
+    required String mimeType,
+    String? filePath,
+    Uint8List? bytes,
+    required String replyTo,
+  }) async {
     try {
-      final msg = await _repository.sendMessageWithFile(chatId, filename: filename, mimeType: mimeType, bytes: bytes, replyTo: replyTo);
+      final msg = await _repository.sendMessageWithFile(
+        chatId,
+        filename: filename,
+        mimeType: mimeType,
+        filePath: filePath,
+        bytes: bytes,
+        replyTo: replyTo,
+        onProgress: (p) => _updatePendingUpload(pendingId, progress: p),
+      );
+      _removePendingUpload(pendingId);
       _onMessageSent(chatId, msg);
     } catch (e) {
       debugPrint('sendFile error: $e');
+      _updatePendingUpload(pendingId, failed: true);
     }
+  }
+
+  void _addPendingUpload(PendingUpload pending) {
+    state = state.copyWith(pendingUploads: [...state.pendingUploads, pending]);
+  }
+
+  void _updatePendingUpload(String id, {double? progress, bool? failed}) {
+    final updated = state.pendingUploads.map((p) {
+      if (p.id == id) return p.copyWith(progress: progress, failed: failed);
+      return p;
+    }).toList();
+    state = state.copyWith(pendingUploads: updated);
+  }
+
+  void _removePendingUpload(String id) {
+    state = state.copyWith(
+      pendingUploads: state.pendingUploads.where((p) => p.id != id).toList(),
+    );
   }
 
   void _onMessageSent(String chatId, ChatMessage msg) {

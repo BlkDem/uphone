@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +10,7 @@ import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/message_input.dart';
 import 'package:uphone_client/features/chat/presentation/widgets/forward_message_sheet.dart';
+import 'package:uphone_client/features/chat/presentation/widgets/pending_upload_bubble.dart';
 import 'package:uphone_client/features/chat/presentation/media_viewer_screen.dart';
 import 'package:uphone_client/features/calls/domain/call_provider.dart';
 import 'package:uphone_client/features/calls/presentation/call_screen.dart';
@@ -48,7 +49,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   String? _editingMessageId;
   bool _isNearBottom = true;
-  int _prevMessageCount = 0;
   bool _initialScrollDone = false;
   int _scrollRetries = 0;
 
@@ -297,7 +297,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           prev != null &&
           !prev.isLoadingMessages &&
           next.messages.length > prev.messages.length) {
-        _prevMessageCount = next.messages.length;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (kIsWeb) {
             if (_scrollController.hasClients) {
@@ -319,8 +318,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             }
           }
         });
-      } else if (next.messages.isNotEmpty) {
-        _prevMessageCount = next.messages.length;
       }
     });
 
@@ -481,8 +478,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                   MessageInput(
                     onSend: (content) => _sendMessage(content),
-                    onSendFile: (filename, mimeType, bytes) =>
-                        _sendFile(filename, mimeType, bytes),
+                    onSendFile: (filename, mimeType, path, bytes) =>
+                        _sendFile(filename, mimeType, path, bytes),
                     onTypingStart: () => ref
                         .read(chatProvider.notifier)
                         .sendTypingStart(widget.chatId),
@@ -615,8 +612,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      itemCount: chatState.messages.length + (chatState.isLoadingOlder ? 1 : 0),
+      itemCount: chatState.messages.length +
+          (chatState.isLoadingOlder ? 1 : 0) +
+          chatState.pendingUploads.length,
       itemBuilder: (context, index) {
+        final pendingOffset =
+            chatState.messages.length + (chatState.isLoadingOlder ? 1 : 0);
+        if (index >= pendingOffset) {
+          final pending = chatState.pendingUploads[index - pendingOffset];
+          return PendingUploadBubble(
+            pending: pending,
+            onRetry: () => ref
+                .read(chatProvider.notifier)
+                .retryPendingUpload(pending.id),
+          );
+        }
         if (index == chatState.messages.length) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
@@ -663,6 +673,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onForward: () => _forwardMessage(msg.id),
                 onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
                     ? () => _openImage(msg)
+                    : null,
+                onTapVideo: msg.type == 'video' && msg.fileUrl.isNotEmpty
+                    ? () => _openVideo(msg)
                     : null,
                 quotedMessage: quotedMessage,
               ),
@@ -696,8 +709,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       itemScrollController: _itemScrollController,
       itemPositionsListener: _itemPositionsListener,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      itemCount: chatState.messages.length + (chatState.isLoadingOlder ? 1 : 0),
+      itemCount: chatState.messages.length +
+          (chatState.isLoadingOlder ? 1 : 0) +
+          chatState.pendingUploads.length,
       itemBuilder: (context, index) {
+        final pendingOffset =
+            chatState.messages.length + (chatState.isLoadingOlder ? 1 : 0);
+        if (index >= pendingOffset) {
+          final pending = chatState.pendingUploads[index - pendingOffset];
+          return PendingUploadBubble(
+            pending: pending,
+            onRetry: () => ref
+                .read(chatProvider.notifier)
+                .retryPendingUpload(pending.id),
+          );
+        }
         if (index == chatState.messages.length) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
@@ -745,6 +771,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onTapImage: msg.type == 'image' && msg.fileUrl.isNotEmpty
                     ? () => _openImage(msg)
                     : null,
+                onTapVideo: msg.type == 'video' && msg.fileUrl.isNotEmpty
+                    ? () => _openVideo(msg)
+                    : null,
                 quotedMessage: quotedMessage,
               ),
             ),
@@ -772,11 +801,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
-  void _sendFile(String filename, String mimeType, Uint8List bytes) {
+  void _sendFile(String filename, String mimeType, String? path, Uint8List? bytes) {
     final replyTo = _replyToParam;
     ref
         .read(chatProvider.notifier)
-        .sendFile(widget.chatId, filename, mimeType, bytes, replyTo: replyTo);
+        .sendFile(widget.chatId, filename, mimeType, filePath: path, bytes: bytes, replyTo: replyTo);
     if (replyTo.isNotEmpty) {
       setState(() => _quotedMessages = []);
     }
@@ -970,6 +999,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       MaterialPageRoute(
         builder: (_) => MediaViewerScreen(
           messages: images,
+          initialIndex: initialIndex,
+          chatId: widget.chatId,
+        ),
+      ),
+    );
+  }
+
+  void _openVideo(ChatMessage msg) {
+    final currentChatState = ref.read(chatProvider);
+    final videos = currentChatState.messages
+        .where((m) => m.type == 'video' && m.fileUrl.isNotEmpty)
+        .toList();
+    final initialIndex = videos.indexOf(msg);
+    if (initialIndex < 0) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MediaViewerScreen(
+          messages: videos,
           initialIndex: initialIndex,
           chatId: widget.chatId,
         ),

@@ -65,18 +65,18 @@ func main() {
 	}
 
 	var uploadHandler *chat.UploadHandler
-	if cfg.MinIOEndpoint != "" {
+	if cfg.S3.Endpoint != "" {
 		s3Storage, err := storage.NewS3Storage(cfg)
 		if err != nil {
 			log.Printf("warning: failed to init S3 storage: %v, falling back to local filesystem", err)
 		} else {
-			uploadHandler = chat.NewUploadHandler(s3Storage, uploadBaseURL)
+			uploadHandler = chat.NewUploadHandler(s3Storage, uploadBaseURL, cfg.ThumbnailWidth)
 			log.Println("Storage: using S3/MinIO")
 		}
 	}
 	if uploadHandler == nil {
 		localStorage := storage.NewLocalStorage(absUploadDir)
-		uploadHandler = chat.NewUploadHandler(localStorage, uploadBaseURL)
+		uploadHandler = chat.NewUploadHandler(localStorage, uploadBaseURL, cfg.ThumbnailWidth)
 		log.Printf("Storage: using local filesystem at %s", absUploadDir)
 	}
 

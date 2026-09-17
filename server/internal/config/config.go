@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"strconv"
 )
@@ -13,14 +14,24 @@ type Config struct {
 	UploadBaseURL  string
 	GoogleClientID string
 	FCMCredentials string
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	MinIOUseSSL    bool
+	S3             S3Config
 	TurnURL        string
 	TurnUser       string
 	TurnPass       string
+	ThumbnailWidth int
+}
+
+// S3Config holds S3-compatible storage settings. It supports both AWS-style
+// env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ...) and the legacy
+// MinIO-style ones (MINIO_ENDPOINT, MINIO_ACCESS_KEY, ...).
+type S3Config struct {
+	Endpoint     string
+	AccessKey    string
+	SecretKey    string
+	Bucket       string
+	Region       string
+	UseSSL       bool
+	UsePathStyle bool
 }
 
 type DBConfig struct {
@@ -46,14 +57,37 @@ func Load() *Config {
 		UploadBaseURL:  getEnv("UPLOAD_BASE_URL", ""),
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 		FCMCredentials: getEnv("FCM_CREDENTIALS", ""),
-		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", ""),
-		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", ""),
-		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", ""),
-		MinIOBucket:    getEnv("MINIO_BUCKET", "uphone-uploads"),
-		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "") == "true",
+		S3:             loadS3Config(),
 		TurnURL:        getEnv("TURN_URL", ""),
 		TurnUser:       getEnv("TURN_USER", ""),
 		TurnPass:       getEnv("TURN_PASS", ""),
+		ThumbnailWidth: getEnvInt("THUMBNAIL_WIDTH", 360),
+	}
+}
+
+func loadS3Config() S3Config {
+	endpoint := getEnv("AWS_ENDPOINT", getEnv("AWS_URL", getEnv("MINIO_ENDPOINT", "")))
+
+	// minio.New expects a bare host[:port]; extract the scheme if present.
+	useSSL := getEnv("MINIO_USE_SSL", "") == "true"
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		switch u.Scheme {
+		case "https":
+			useSSL = true
+		case "http":
+			useSSL = false
+		}
+		endpoint = u.Host
+	}
+
+	return S3Config{
+		Endpoint:     endpoint,
+		AccessKey:    getEnv("AWS_ACCESS_KEY_ID", getEnv("MINIO_ACCESS_KEY", "")),
+		SecretKey:    getEnv("AWS_SECRET_ACCESS_KEY", getEnv("MINIO_SECRET_KEY", "")),
+		Bucket:       getEnv("AWS_BUCKET", getEnv("MINIO_BUCKET", "uphone-uploads")),
+		Region:       getEnv("AWS_DEFAULT_REGION", getEnv("AWS_REGION", "")),
+		UseSSL:       useSSL,
+		UsePathStyle: getEnv("AWS_USE_PATH_STYLE_ENDPOINT", "true") == "true",
 	}
 }
 

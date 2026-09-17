@@ -48,6 +48,9 @@ class ChatMessage {
   final String content;
   final String type;
   final String fileUrl;
+  final String thumbnailUrl;
+  final int thumbnailWidth;
+  final int thumbnailHeight;
   final String replyTo;
   final bool isPinned;
   final bool isDeleted;
@@ -70,6 +73,9 @@ class ChatMessage {
     this.content = '',
     this.type = 'text',
     this.fileUrl = '',
+    this.thumbnailUrl = '',
+    this.thumbnailWidth = 0,
+    this.thumbnailHeight = 0,
     this.replyTo = '',
     this.isPinned = false,
     this.isDeleted = false,
@@ -89,6 +95,9 @@ class ChatMessage {
       content: json['content'] ?? '',
       type: json['type'] ?? 'text',
       fileUrl: json['file_url'] ?? '',
+      thumbnailUrl: json['thumbnail_url'] ?? '',
+      thumbnailWidth: json['thumbnail_width'] ?? 0,
+      thumbnailHeight: json['thumbnail_height'] ?? 0,
       replyTo: json['reply_to'] ?? '',
       isPinned: json['is_pinned'] ?? false,
       isDeleted: json['is_deleted'] ?? false,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uphone_client/features/auth/domain/auth_provider.dart';
 import 'package:uphone_client/features/chat/domain/chat_provider.dart';
 import 'package:uphone_client/shared/models/chat.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -53,7 +52,7 @@ class _MediaGalleryScreenState extends ConsumerState<MediaGalleryScreen>
   Future<void> _loadMedia() async {
     setState(() => _isLoading = true);
     final repo = ref.read(chatRepositoryProvider);
-    final mediaType = _tabs[_tabController.index]['type'] as String?;
+    final mediaType = _tabs[_tabController.index]['type'];
     final messages = await repo.getMediaMessages(widget.chatId, mediaType: mediaType);
     if (mounted) {
       setState(() {
@@ -124,11 +123,9 @@ class _MediaGalleryScreenState extends ConsumerState<MediaGalleryScreen>
     if (msg.type != 'image' && msg.type != 'video') return;
     if (msg.fileUrl.isEmpty) return;
 
-    // Pass all viewable media (images + videos) to the viewer
+    // Pass only media of the same type, so images open images and videos open videos
     final viewableMedia = _mediaMessages
-        .where((m) =>
-            (m.type == 'image' || m.type == 'video') &&
-            m.fileUrl.isNotEmpty)
+        .where((m) => m.type == msg.type && m.fileUrl.isNotEmpty)
         .toList();
     final initialIndex = viewableMedia.indexOf(msg);
     if (initialIndex < 0) return;
@@ -178,25 +175,47 @@ class _MediaTile extends StatelessWidget {
     }
 
     if (message.type == 'video') {
+      final hasThumb =
+          message.thumbnailUrl.isNotEmpty &&
+          message.thumbnailWidth > 0 &&
+          message.thumbnailHeight > 0;
       return GestureDetector(
         onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
-          ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Video icon background
-              Center(
-                child: Icon(
-                  Icons.play_circle_fill,
-                  size: 40,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+              if (hasThumb)
+                CachedNetworkImage(
+                  imageUrl: message.thumbnailUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.play_circle_fill,
+                      size: 40,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Center(
+                    child: Icon(
+                      Icons.play_circle_fill,
+                      size: 40,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                    ),
+                  ),
                 ),
-              ),
-              // Filename at bottom
               Positioned(
                 bottom: 4,
                 left: 4,

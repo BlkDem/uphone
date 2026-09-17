@@ -30,33 +30,39 @@ type S3Storage struct {
 }
 
 func NewS3Storage(cfg *config.Config) (*S3Storage, error) {
-	if cfg.MinIOEndpoint == "" {
-		return nil, fmt.Errorf("MINIO_ENDPOINT is not set")
+	if cfg.S3.Endpoint == "" {
+		return nil, fmt.Errorf("S3 endpoint is not set")
 	}
 
-	minioClient, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
-		Secure: cfg.MinIOUseSSL,
-	})
+	opts := &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.S3.AccessKey, cfg.S3.SecretKey, ""),
+		Secure: cfg.S3.UseSSL,
+		Region: cfg.S3.Region,
+	}
+	if cfg.S3.UsePathStyle {
+		opts.BucketLookup = minio.BucketLookupPath
+	}
+
+	minioClient, err := minio.New(cfg.S3.Endpoint, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
-	s := &S3Storage{client: minioClient, bucket: cfg.MinIOBucket}
+	s := &S3Storage{client: minioClient, bucket: cfg.S3.Bucket}
 
-	exists, err := s.client.BucketExists(context.Background(), cfg.MinIOBucket)
+	exists, err := s.client.BucketExists(context.Background(), cfg.S3.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bucket: %w", err)
 	}
 	if !exists {
-		err = s.client.MakeBucket(context.Background(), cfg.MinIOBucket, minio.MakeBucketOptions{})
+		err = s.client.MakeBucket(context.Background(), cfg.S3.Bucket, minio.MakeBucketOptions{Region: cfg.S3.Region})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
-		log.Printf("S3: created bucket %s", cfg.MinIOBucket)
+		log.Printf("S3: created bucket %s", cfg.S3.Bucket)
 	}
 
-	log.Printf("S3: connected to %s, bucket=%s", cfg.MinIOEndpoint, cfg.MinIOBucket)
+	log.Printf("S3: connected to %s, bucket=%s", cfg.S3.Endpoint, cfg.S3.Bucket)
 	return s, nil
 }
 
